@@ -1,0 +1,363 @@
+rules_version = '2';
+
+// Reglas de seguridad de la liga.
+// Copiá todo este archivo en Firebase → Firestore Database → Reglas → Publicar.
+//
+// - Cualquiera puede ver la liga (tabla, partidos, jugadores, equipos, mapas). Las ofertas del mercado, solo capitanes y staff.
+// - Solo los capitanes pueden ofertar y denunciar, y solo por su propio equipo.
+// - Los capitanes piden altas de jugadores y cambios de valor o cláusula: el staff aprueba.
+// - Solo el staff logueado cambia datos de la liga. Algunas cosas son solo de ultra staff.
+// - La auditoría solo la lee ultra staff y nadie la puede editar ni borrar.
+// - Los jugadores y coaches entran con Discord o con su mail: lo que hacen (vínculo, asistencia, pronósticos, votos, notas) lo guarda el servidor.
+// - El resumen público, las temporadas archivadas, los resultados de los capitanes y los votos los escribe solo el servidor.
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() { return request.auth != null; }
+    function staffPath() { return /databases/$(database)/documents/staff/$(request.auth.uid); }
+    function capPath() { return /databases/$(database)/documents/captains/$(request.auth.uid); }
+    function isStaff() { return signedIn() && exists(staffPath()) && get(staffPath()).data.active == true; }
+    function isUltra() { return isStaff() && get(staffPath()).data.role == 'ultra'; }
+    function isCaptain() { return signedIn() && exists(capPath()) && get(capPath()).data.active == true && get(capPath()).data.team is string; }
+    function capTeam() { return get(capPath()).data.team; }
+    function changed() { return request.resource.data.diff(resource.data).affectedKeys(); }
+    function itemsOk(keys) {
+      return request.resource.data.keys().hasOnly(keys)
+        && request.resource.data.items is list
+        && request.resource.data.items.size() <= 50;
+    }
+
+    // Configuración general de la liga
+    match /league/{docId} {
+      allow read: if true;
+      allow create, delete: if isUltra();
+      allow update: if isUltra()
+        || (isStaff() && changed().hasOnly(['windowOpen', 'windowClose', 'maxSign', 'rosterMin', 'rosterMax', 'credited', 'maps']));
+    }
+
+    // Equipos: el staff edita todo menos la tabla manual, el logo y si el equipo está en la liga
+    match /teams/{teamId} {
+      allow read: if true;
+      allow create, delete: if isUltra();
+      allow update: if isUltra() || (isStaff() && !changed().hasAny(['adj', 'hidden', 'custom', 'logoAt']));
+    }
+
+    // Logos de los equipos (se suben desde el panel): todos los ven, solo ultra staff los cambia
+    match /logos/{teamId} {
+      allow read: if true;
+      allow write: if isUltra() && (request.resource == null || request.resource.data.data.size() < 1000000);
+    }
+
+    match /players/{id} {
+      allow read: if true;
+      allow create, update: if isStaff();
+      allow delete: if isUltra();
+    }
+
+    match /matches/{id} {
+      allow read: if true;
+      allow create, update: if isStaff();
+      allow delete: if isUltra();
+    }
+
+    match /transfers/{id} {
+      allow read: if true;
+      allow create: if isStaff();
+      allow update, delete: if isUltra();
+    }
+
+    // Sorteos de mapas
+    match /draws/{id} {
+      allow read: if true;
+      allow create, delete: if isStaff();
+      allow update: if isUltra();
+    }
+    match /live/{id} {
+      allow read: if true;
+      allow write: if isStaff();
+    }
+
+    // Asistencia, skills y puntos individuales: todos ven, el staff carga
+    match /perf/{pid} {
+      allow read: if true;
+      allow write: if isStaff();
+    }
+
+    // Ofertas: solo capitanes, cada uno en su documento y por su equipo; las ven solo capitanes y staff
+    match /offers/{uid} {
+      allow read: if isStaff() || isCaptain();
+      allow create, update: if isStaff()
+        || (isCaptain() && request.auth.uid == uid && itemsOk(['items', 'team']) && request.resource.data.team == capTeam());
+      allow delete: if isUltra();
+    }
+
+    // Denuncias: solo capitanes; cada uno ve las suyas y el staff ve todas
+    match /reports/{uid} {
+      allow read: if signedIn() && (request.auth.uid == uid || isStaff());
+      allow create, update: if isStaff() || (isCaptain() && request.auth.uid == uid && itemsOk(['items']));
+      allow delete: if isUltra();
+    }
+
+    // Cuentas de staff: se crean y borran solo desde el servidor (función de Netlify)
+    match /staff/{uid} {
+      allow read: if signedIn() && (request.auth.uid == uid || isUltra());
+      allow update: if isUltra() && changed().hasOnly(['role', 'active']);
+      allow create, delete: if false;
+    }
+
+    // Cuentas de capitán: sin ningún poder de staff. Ultra staff les asigna equipo.
+    match /captains/{uid} {
+      allow read: if signedIn() && (request.auth.uid == uid || isStaff());
+      allow update: if isUltra() && changed().hasOnly(['team', 'active']);
+      allow create, delete: if false;
+    }
+
+    // Solicitudes de capitanes: altas de jugadores, cambios de valor o cláusula, y fichar o dar de baja a un coach
+    function coachPath(cid) { return /databases/$(database)/documents/coaches/$(cid); }
+    function validPlayerReq(d) {
+      return d.keys().hasOnly(['type', 'team', 'pid', 'name', 'role', 'rank', 'value', 'clause', 'prevValue', 'prevClause', 'by', 'u', 'at', 'status', 'note'])
+        && d.value is int && d.value >= 100 && d.value <= 1500
+        && d.clause is int && d.clause >= 0 && d.clause <= 3000
+        && (
+          (d.type == 'add' && d.name is string && d.name.size() >= 2 && d.name.size() <= 30)
+          || (d.type == 'edit' && d.pid is string
+              && exists(/databases/$(database)/documents/players/$(d.pid))
+              && get(/databases/$(database)/documents/players/$(d.pid)).data.team == capTeam())
+        );
+    }
+    function validCoachReq(d) {
+      return d.keys().hasOnly(['type', 'team', 'coach', 'name', 'by', 'u', 'at', 'status', 'note'])
+        && d.coach is string && d.name is string && d.name.size() <= 40
+        && exists(coachPath(d.coach))
+        && (d.type == 'coach') == !(capTeam() in get(coachPath(d.coach)).data.get('teams', {}));
+    }
+    function validRequest() {
+      let d = request.resource.data;
+      return d.team == capTeam()
+        && d.by == request.auth.uid
+        && d.u == get(capPath()).data.u
+        && d.status == 'pend'
+        && ((d.type in ['add', 'edit'] && validPlayerReq(d)) || (d.type in ['coach', 'coachOut'] && validCoachReq(d)));
+    }
+    match /requests/{id} {
+      allow read: if isStaff() || (isCaptain() && resource.data.team == capTeam())
+        || (signedIn() && (resource == null || resource.data.get('uid', '') == request.auth.uid));
+      allow create: if isCaptain() && validRequest();
+      allow update: if isStaff();
+      allow delete: if isUltra() || (isCaptain() && resource.data.by == request.auth.uid && resource.data.status == 'pend');
+    }
+
+    // Premios para canjear: todos los ven; los carga ultra staff; el staff solo baja el stock al aprobar
+    match /prizes/{id} {
+      allow read: if true;
+      allow create, delete: if isUltra();
+      allow update: if isUltra() || (isStaff() && changed().hasOnly(['stock']));
+    }
+
+    // Canjes: solo los capitanes los piden, para un jugador o un coach de su equipo; el staff los aprueba
+    function validRedeem() {
+      let d = request.resource.data;
+      let pr = get(/databases/$(database)/documents/prizes/$(d.prizeId)).data;
+      return d.keys().hasOnly(['prizeId', 'prize', 'pid', 'coach', 'player', 'team', 'method', 'pts', 'usd', 'note', 'by', 'u', 'at', 'status'])
+        && d.team == capTeam()
+        && d.by == request.auth.uid
+        && d.u == get(capPath()).data.u
+        && d.status == 'pend'
+        && d.note is string && d.note.size() <= 200
+        && ((('coach' in d) && d.coach is string && capTeam() in get(coachPath(d.coach)).data.get('teams', {}))
+          || (!('coach' in d) && get(/databases/$(database)/documents/players/$(d.pid)).data.team == capTeam()))
+        && pr.active == true
+        && ((d.method == 'pts' && pr.pts is int && d.pts == pr.pts)
+          || (d.method == 'usd' && pr.usd != null && d.pts == 0));
+    }
+    match /redeems/{id} {
+      allow read: if true;
+      allow create: if isStaff() || (isCaptain() && validRedeem());
+      allow update: if isStaff();
+      allow delete: if isUltra() || (isCaptain() && resource.data.by == request.auth.uid && resource.data.status == 'pend');
+    }
+
+    // Coaches: personas aparte (no juegan). Los ve todo el mundo; el staff los carga y registra en qué equipos están
+    match /coaches/{id} {
+      allow read: if true;
+      allow create, update: if isStaff();
+      allow delete: if isUltra();
+    }
+    // Sueldos de los coaches: los paga el servidor cada lunes. El staff solo los marca como pagados (recarga del equipo)
+    match /salaries/{id} {
+      allow read: if true;
+      allow update: if isStaff() && changed().hasOnly(['status', 'paidAt', 'via', 'paidBy']);
+      allow create, delete: if isUltra();
+    }
+    // Recargas: el equipo paga en dólares y el staff le renueva las ONYX Coins
+    match /topups/{id} {
+      allow read: if isStaff() || (isCaptain() && resource.data.team == capTeam());
+      allow create: if isStaff() && request.resource.data.by == get(staffPath()).data.u;
+      allow update, delete: if isUltra();
+    }
+    // Resumen de cada semana de sueldos (lo escribe solo el servidor)
+    match /payroll/{id} {
+      allow read: if isStaff();
+      allow write: if false;
+    }
+
+    // Mapas: en cada fecha hay dos partidas por cruce (ida y vuelta) y cada capitán elige UNA (mapa y lado).
+    // mappicks lo ven su capitán y el staff (no el rival); mapclaims dice qué equipo tomó cada partida.
+    function matchOf(mid) { return get(/databases/$(database)/documents/matches/$(mid)).data; }
+    function claimPath(mid) { return /databases/$(database)/documents/mapclaims/$(mid); }
+    function pickPath(pid) { return /databases/$(database)/documents/mappicks/$(pid); }
+    // Partida de la fecha en la que juega el equipo del capitán y que todavía no se jugó
+    function openGameOf(mid, f) {
+      let m = matchOf(mid);
+      let t = capTeam();
+      return (m.a == t || m.b == t) && m.fecha == f && m.status != 'played';
+    }
+    // Elección del capitán: una por equipo y por fecha (doc f<fecha>_<equipo>), con la partida tomada a su nombre
+    function validMapPick(id) {
+      let d = request.resource.data;
+      let t = capTeam();
+      return d.keys().hasOnly(['matchId', 'fecha', 'team', 'map', 'side', 'by', 'u', 'at'])
+        && d.keys().hasAll(['matchId', 'fecha', 'team', 'map', 'side', 'by'])
+        && d.team == t
+        && d.by == request.auth.uid
+        && d.fecha is int
+        && d.matchId is string
+        && id == 'f' + string(d.fecha) + '_' + t
+        && d.side in ['atk', 'def']
+        && d.map is string && d.map.size() > 0 && d.map.size() <= 30
+        && openGameOf(d.matchId, d.fecha)
+        && getAfter(claimPath(d.matchId)).data.team == t
+        && (resource == null || resource.data.matchId == d.matchId
+            || (matchOf(resource.data.matchId).status != 'played' && !existsAfter(claimPath(resource.data.matchId))));
+    }
+    // Quién tomó cada partida (sin el mapa): la primera que la toma se la queda
+    function validClaim(mid) {
+      let d = request.resource.data;
+      let t = capTeam();
+      let pid = 'f' + string(d.fecha) + '_' + t;
+      return d.keys().hasOnly(['team', 'fecha', 'at'])
+        && d.team == t
+        && d.fecha is int
+        && openGameOf(mid, d.fecha)
+        && getAfter(pickPath(pid)).data.matchId == mid;
+    }
+    function releaseClaim(mid) {
+      let pid = 'f' + string(resource.data.fecha) + '_' + capTeam();
+      return resource.data.team == capTeam()
+        && matchOf(mid).status != 'played'
+        && (!existsAfter(pickPath(pid)) || getAfter(pickPath(pid)).data.matchId != mid);
+    }
+    match /mappicks/{id} {
+      allow read: if isStaff() || (isCaptain() && resource.data.team == capTeam());
+      allow create, update: if isStaff() || (isCaptain() && validMapPick(id));
+      allow delete: if isStaff();
+    }
+    match /mapclaims/{mid} {
+      allow read: if isStaff() || isCaptain();
+      allow create: if isStaff() || (isCaptain() && validClaim(mid));
+      allow update: if isStaff() || (isCaptain() && resource.data.team == capTeam() && validClaim(mid));
+      allow delete: if isStaff() || (isCaptain() && releaseClaim(mid));
+    }
+
+    // Resumen público de la liga (public/snapshot, public/meta) y contadores de pronósticos: los escribe solo el servidor
+    match /public/{docId} {
+      allow read: if true;
+      allow write: if false;
+    }
+    // Cambios que la página anota cuando el servidor no respondió (los procesa la revisión de cada 10 minutos)
+    match /pubqueue/{docId} {
+      allow read: if false;
+      allow create, update: if (isStaff() || isCaptain()) && docId == 'main'
+        && request.resource.data.keys().hasOnly(['paths', 'at'])
+        && request.resource.data.paths is list && request.resource.data.paths.size() <= 400;
+      allow delete: if false;
+    }
+
+    // Temporadas cerradas (Historia): las archiva el servidor
+    match /seasons/{id} {
+      allow read: if true;
+      allow create, update: if false;
+      allow delete: if isUltra();
+    }
+
+    // Cuadro de playoffs: el staff carga las series
+    match /playoffs/{id} {
+      allow read: if true;
+      allow create, update: if isStaff();
+      allow delete: if isUltra();
+    }
+
+    // Resultados que mandan los capitanes (los guarda el servidor) y sus capturas
+    match /results/{id} {
+      allow read: if isStaff() || (isCaptain() && resource.data.team == capTeam());
+      allow update: if isStaff() && changed().hasOnly(['status', 'reviewNote', 'reviewedBy', 'reviewedAt', 'check']);
+      allow create: if false;
+      allow delete: if isUltra();
+    }
+    match /resultimg/{id} {
+      allow read: if isStaff();
+      allow write: if false;
+    }
+
+    // Jugadores y coaches con cuenta (Discord o mail). La cuenta la crea el servidor; el staff puede desvincularla o bloquearla
+    match /members/{uid} {
+      allow read: if signedIn() && (request.auth.uid == uid || isStaff());
+      allow update: if isStaff() && changed().hasOnly(['pid', 'linkedBy', 'linkedAt', 'banned', 'coachId']);
+      allow create, delete: if false;
+    }
+    // Asistencia confirmada por cada jugador (la guarda el servidor)
+    match /att/{id} {
+      allow read: if true;
+      allow write: if false;
+    }
+    // Pronósticos: cada jugador ve los suyos (el ranking va en el resumen público)
+    match /pickem/{uid} {
+      allow read: if signedIn() && (request.auth.uid == uid || isStaff());
+      allow write: if false;
+    }
+    // Votación de capitán: las mociones son públicas; los votos son secretos
+    match /motions/{id} {
+      allow read: if true;
+      allow create, update: if false;
+      allow delete: if isUltra();
+    }
+    match /votes/{id} {
+      allow read: if isUltra();
+      allow write: if false;
+    }
+
+    // Registro de dólares (recargas, canjes pagados, sponsors): solo staff
+    match /ledger/{id} {
+      allow read: if isStaff();
+      allow create: if isStaff() && request.resource.data.by == get(staffPath()).data.u;
+      allow update, delete: if isUltra();
+    }
+
+    // Notas de seguimiento de los coaches: las guarda y las muestra el servidor (cada jugador ve solo las suyas y las de su equipo)
+    match /coachnotes/{id} {
+      allow read, write: if false;
+    }
+    // Límite de cuentas nuevas por día (servidor)
+    match /signups/{id} {
+      allow read, write: if false;
+    }
+
+    // Uso interno del servidor (límites de lectura con IA, sincronizaciones)
+    match /ailimit/{id} {
+      allow read, write: if false;
+    }
+    match /sys/{id} {
+      allow read, write: if false;
+    }
+
+    // Auditoría: se agrega, nunca se edita ni se borra
+    match /audit/{id} {
+      allow read: if isUltra();
+      allow create: if isStaff()
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.u == get(staffPath()).data.u;
+      allow update, delete: if false;
+    }
+  }
+}
