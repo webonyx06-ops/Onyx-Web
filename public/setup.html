@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex">
+<title>Instalación de ONYX</title>
+<link rel="icon" href="favicon.ico" sizes="any">
+<link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="manifest" href="site.webmanifest">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Michroma&family=Chakra+Petch:wght@500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="css/styles.css">
+<style>
+  .setup{max-width:760px;margin:0 auto;padding-block:48px 64px;display:grid;gap:18px}
+  .setup h1{font-family:var(--f-wide);font-weight:400;font-size:clamp(22px,4vw,34px);letter-spacing:.06em}
+  .setup ol{margin:0;padding-left:20px;color:var(--muted);display:grid;gap:6px}
+  .prev{max-height:260px;overflow:auto}
+  .prev table{width:100%;border-collapse:collapse;font-size:14px}
+  .prev td,.prev th{padding:6px 8px;border-top:1px solid var(--line);text-align:left}
+  .prev th{font-family:var(--f-mono);font-size:11px;letter-spacing:.1em;color:var(--dim);text-transform:uppercase}
+  .ok{color:var(--win)} .bad{color:var(--loss)}
+</style>
+</head>
+<body>
+<main class="setup">
+  <div><div class="eyebrow">Una sola vez</div><h1>Instalación de la liga</h1></div>
+  <div class="panel pad cut">
+    <ol>
+      <li>Ya configuraste Firebase y Netlify como dice el README.</li>
+      <li>Pegá la clave de instalación (la variable <span class="mono">SETUP_KEY</span> que pusiste en Netlify).</li>
+      <li>Cargá tu archivo <span class="mono">staff.csv</span> o pegá su contenido: <span class="mono">usuario,contraseña,rol</span> (rol = <span class="mono">ultra</span> o <span class="mono">staff</span>).</li>
+      <li>Tocá “Crear cuentas”. Esto también crea la liga base: equipos, mapas y fixture.</li>
+    </ol>
+  </div>
+  <form class="panel pad cut report" id="f" novalidate>
+    <div class="ff"><label for="key">Clave de instalación</label><input id="key" type="password" autocomplete="off"></div>
+    <div class="ff"><label for="file">Archivo staff.csv</label><input id="file" type="file" accept=".csv,text/csv,text/plain"></div>
+    <div class="ff"><label for="csv">O pegá el contenido</label><textarea id="csv" rows="8" placeholder="usuario,contraseña,rol&#10;ultra1,xxxx-xxxx-xxxx,ultra&#10;staff01,xxxx-xxxx-xxxx,staff"></textarea></div>
+    <div class="prev" id="prev"></div>
+    <div class="err" id="err" hidden></div>
+    <div><button class="btn gold" type="submit" id="go">Crear cuentas</button></div>
+    <div id="res"></div>
+  </form>
+  <p class="muted" style="font-size:13px">Cuando termines, borrá la variable <span class="mono">SETUP_KEY</span> en Netlify. Igual, esta instalación solo funciona mientras no haya ninguna cuenta de staff creada.</p>
+  <p><a class="btn ghost" href="./">Volver a la liga</a></p>
+</main>
+<script>
+(() => {
+  const $ = s => document.querySelector(s);
+  const esc = s => String(s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+  function parse(txt) {
+    return txt.split(/\r?\n/).map(l => l.trim()).filter(Boolean)
+      .map(l => l.split(/[,;\t]/).map(x => x.trim()))
+      .filter(c => c.length >= 2 && !/^usuario$/i.test(c[0]))
+      .map(c => ({u: c[0].toLowerCase(), p: c[1], role: /ultra/i.test(c[2] || "") ? "ultra" : "staff"}));
+  }
+  function preview() {
+    const L = parse($("#csv").value);
+    $("#prev").innerHTML = L.length ? `<table><tr><th>Usuario</th><th>Rol</th><th>Contraseña</th></tr>${L.map(x => `<tr><td class="mono">${esc(x.u)}</td><td>${x.role === "ultra" ? "Ultra staff" : "Staff"}</td><td class="mono muted">${"•".repeat(Math.min(14, x.p.length))}</td></tr>`).join("")}</table><p class="muted" style="font-size:13px;margin-top:6px">${L.length} cuentas · ${L.filter(x => x.role === "ultra").length} ultra staff</p>` : "";
+  }
+  $("#csv").addEventListener("input", preview);
+  $("#file").addEventListener("change", e => { const f = e.target.files[0]; if (!f) return; const r = new FileReader(); r.onload = () => { $("#csv").value = r.result; preview(); }; r.readAsText(f); });
+  $("#f").addEventListener("submit", async e => {
+    e.preventDefault();
+    const users = parse($("#csv").value), key = $("#key").value;
+    const err = t => { $("#err").hidden = !t; $("#err").textContent = t || ""; };
+    if (!key) return err("Falta la clave de instalación.");
+    if (!users.length) return err("No hay cuentas para crear.");
+    err(""); $("#go").disabled = true; $("#go").textContent = "Creando…";
+    try {
+      const r = await fetch("/api/staff", {method: "POST", headers: {"content-type": "application/json"}, body: JSON.stringify({action: "bootstrap", key, users})});
+      const j = await r.json().catch(() => ({error: "El servidor no respondió. ¿Se publicó la función en Netlify?"}));
+      if (!r.ok) throw new Error(j.error || "Error");
+      $("#res").innerHTML = `<p class="ok" style="font-size:16px">Listo: ${j.created.length} cuentas creadas${j.seeded ? " y la liga base cargada" : ""}.</p><p class="muted">Ya podés entrar desde la liga con “Acceso staff”. Borrá ahora la variable SETUP_KEY en Netlify.</p>`;
+      $("#csv").value = ""; preview();
+    } catch (er) { err(er.message); }
+    finally { $("#go").disabled = false; $("#go").textContent = "Crear cuentas"; }
+  });
+})();
+</script>
+</body>
+</html>
