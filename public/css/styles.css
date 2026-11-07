@@ -2107,3 +2107,21 @@ footer#footer{flex-direction:column;gap:12px}
 .riot-card small{display:block;font-size:12.5px}
 .an-trk{display:inline-flex;align-items:center;padding:3px 10px;border-radius:999px;font-size:12px;font-weight:600;color:var(--accent-hi);background:color-mix(in srgb,var(--accent) 16%,transparent);text-decoration:none}
 .an-trk:hover{background:color-mix(in srgb,var(--accent) 28%,transparent)}
+
+/* ===== Rankeds de Valorant ===== */
+.vs-box{display:grid;gap:10px;padding:14px 16px;border-radius:var(--r-md);background:linear-gradient(135deg,color-mix(in srgb,var(--accent) 10%,transparent),transparent 60%),rgba(255,255,255,.02);box-shadow:inset 0 0 0 1px var(--line);margin:4px 0}
+.vs-h{display:flex;align-items:center;gap:8px}.vs-h .ic{color:var(--accent-hi)}.vs-h small{margin-left:auto;color:var(--dim);font-size:11.5px;font-weight:700;letter-spacing:.06em}
+.vs-rank{display:flex;flex-wrap:wrap;align-items:center;gap:8px 16px}
+.vs-tier{display:grid;padding:8px 14px;border-radius:12px;background:color-mix(in srgb,var(--rc,var(--accent)) 14%,transparent);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--rc,var(--accent)) 45%,transparent)}
+.vs-tier b{font-family:var(--f-wide);font-stretch:112%;font-weight:800;font-size:18px;color:var(--rc,var(--fg))}.vs-tier small{font-size:12px;color:var(--muted)}
+.vs-tier i{font-style:normal;font-weight:700}.vs-tier i.up{color:var(--win)}.vs-tier i.dn{color:var(--loss)}
+.vs-peak{font-size:13px;color:var(--muted)}.vs-peak b{color:var(--fg)}
+.vs-tiles{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:6px}
+.vs-tiles div{display:grid;justify-items:center;padding:8px 4px;border-radius:10px;background:rgba(255,255,255,.03);box-shadow:inset 0 0 0 1px var(--line)}
+.vs-tiles b{font-size:16px;font-weight:800}.vs-tiles span{font-size:11px;color:var(--muted)}
+.vs-sub{font-size:12.5px;color:var(--muted);margin:0}.vs-sub b{color:var(--fg);font-weight:600}
+.vs-foot{display:flex;flex-wrap:wrap;justify-content:space-between;gap:6px 12px;font-size:12px;color:var(--dim)}.vs-foot a{color:var(--accent-hi);text-decoration:none}
+.vs-foot .linkish{font-size:12px;color:var(--muted)}.vs-foot .linkish[disabled]{opacity:.6;cursor:default}
+@media (max-width:480px){.vs-tiles{grid-template-columns:repeat(3,minmax(0,1fr))}}
+.sec-lbl{display:flex;align-items:center;gap:8px;font-size:12px;font-weight:800;letter-spacing:.07em;text-transform:uppercase;color:var(--accent-hi);margin-top:6px}
+.sec-lbl small{color:var(--dim);font-weight:600;letter-spacing:.02em;text-transform:none}

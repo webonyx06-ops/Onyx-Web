@@ -442,7 +442,7 @@ function initFirebase() {
 /* ---------- lectura de la liga: colecciones (staff y capitanes) o resumen público (visitantes) ---------- */
 // Cada visita lee 1 documento (public/meta) y baja el resumen por /api/snapshot con la caché de Netlify.
 // Si el resumen todavía no existe (primera vez) o no se puede leer, se usan las colecciones como siempre.
-const PUB_COLLS = ["teams", "logos", "players", "matches", "transfers", "draws", "perf", "prizes", "redeems", "coaches", "salaries", "seasons", "playoffs", "att", "motions"];
+const PUB_COLLS = ["teams", "logos", "players", "matches", "transfers", "draws", "perf", "prizes", "redeems", "coaches", "salaries", "seasons", "playoffs", "att", "motions", "valstats"];
 const PUB_DOCS = {"league/config": "config", "public/pickagg": "pickagg", "public/pickboard": "pickboard"};
 const isMemberUid = uid => /^(d_\d+|e_[a-f0-9]{24})$/.test(String(uid || ""));
 let pubMode = null, pubSubs = [], snapRev = 0, snapTok = 0;
@@ -601,6 +601,7 @@ function renderAll() {
   if (S.cap.open) renderCap();
   if (ST.open && !ST.spinning) renderStage();
   tryDeep();
+  $$("#modalRoot [data-vs], #anRoot [data-vs]").forEach(el => renderVsBlocks(el.dataset.vs));
 }
 
 function renderBanner() {
@@ -1373,8 +1374,9 @@ function openPlayer(id) {
     <div class="bb"><svg class="radar" viewBox="0 0 300 300" role="img" aria-label="Perfil de ${esc(p.name)} comparado con el mejor de la liga">${grid}${spokes}
       <polygon class="val" points="${vals.map((v, i) => pt(i, v).join(",")).join(" ")}" fill="${t.c}" fill-opacity=".28" stroke="${t.l}" stroke-width="2"/>${vals.map((v, i) => `<circle cx="${pt(i, v)[0]}" cy="${pt(i, v)[1]}" r="3.5" fill="${t.l}"/>`).join("")}${labels}</svg>
       <p class="muted" style="font-size:12px;text-align:center;margin-top:-6px">Cada eje compara con el mejor de la liga en esa estadística.</p>
+      <div class="sec-lbl">${ico("i-trophy")} En el torneo ONYX <small>${s.m} partido${s.m === 1 ? "" : "s"}</small></div>
       <div class="pstats" style="grid-template-columns:repeat(4,minmax(0,1fr))"><div><b>${s.k}</b><span>Kills</span></div><div><b>${s.a}</b><span>Asist.</span></div><div><b>${dec(s.kd)}</b><span>K/D</span></div><div><b>${s.acs}</b><span>ACS</span></div></div>
-      ${playerPerfHtml(p)}${careerHtml(p.id)}
+      ${playerPerfHtml(p)}${careerHtml(p.id)}${ignOf(p.id) ? `<div class="sec-lbl">${ico("i-chart")} En Valorant, fuera del torneo</div>${vsHtml(p.id)}` : ""}
       <div class="loglist">${p.log.map(e => `<div><span class="mono muted">F${e.f}${e.lg ? " " + e.lg : ""}</span><span style="display:flex;gap:6px;align-items:center">${img(e.vs)}${esc(TM(e.vs).name)}</span><span class="mono">${e.k}/${e.d}/${e.a}</span><span class="mono" style="color:${e.won ? "var(--win)" : "var(--loss)"}">${e.score}</span></div>`).join("") || '<span class="muted">Sin partidos jugados.</span>'}</div>
       <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn" data-an-modal="${p.id}">Ver análisis completo</button><button class="btn ghost" type="button" data-share="jugador:${p.id}" data-title="${esc(p.name)}">${ico("i-share")}<span>Compartir</span></button>${trackerBtn(p.id, "btn ghost")}${capTeam() && p.team !== capTeam() ? `<button class="btn gold" data-offer-modal="${p.id}">Hacer una oferta</button>` : ""}</div></div></div>`);
   const ob = $("[data-offer-modal]"); if (ob) ob.addEventListener("click", () => { closeModal(); openOffer(p.id); });
@@ -1566,7 +1568,7 @@ function renderAnalysis() {
       <div class="an-rating" title="Rating ONYX: combina ACS, K/D, kills, asistencias, supervivencia, victorias y asistencia a fechas, comparado con toda la liga (0 a 100)"><b>${rating ?? "–"}</b><span>Rating ONYX</span></div>
       <button class="x" data-an-close aria-label="Cerrar">×</button></div>
     <div class="an-body">
-      <div class="an-tiles">${tiles.map(([l, val]) => `<div><b>${val}</b><span>${l}</span></div>`).join("")}</div>
+      <div class="an-tiles">${tiles.map(([l, val]) => `<div><b>${val}</b><span>${l}</span></div>`).join("")}</div>${vsHtml(p.id)}
       <div class="an-grid">
         <div class="an-card"><h4>Cómo es el jugador</h4>${prof.lines.map(l => `<p>${l}</p>`).join("")}
           ${prof.good.length || prof.bad.length ? `<div class="an-sw">${prof.good.length ? `<div><h5>Puntos fuertes</h5><ul>${prof.good.map(g => `<li>${esc(g.l)} <small>mejor que el ${g.v}%</small></li>`).join("")}</ul></div>` : ""}${prof.bad.length ? `<div><h5>A mejorar</h5><ul>${prof.bad.map(g => `<li>${esc(g.l)} <small>mejor que el ${g.v}%</small></li>`).join("")}</ul></div>` : ""}</div>` : ""}</div>
@@ -2995,7 +2997,7 @@ $("#adminRoot").addEventListener("change", async e => {
   if (kind === "cfg" && p[0] === "discord" && v && !DISCORD_RE.test(v)) { toast("Ese link no es una invitación de Discord (tiene que empezar con https://discord.gg/)."); renderAdminSoon(); return; }
   if (kind === "cfg" && p[0] === "payLink" && v && !/^https:\/\/[^\s"'<>]{6,300}$/.test(v)) { toast("El link de pago tiene que empezar con https://"); renderAdminSoon(); return; }
   if (kind === "cfg" && p[0] === "results.aiDaily" && !(v >= 1 && v <= 200)) { toast("Entre 1 y 200 lecturas por día."); renderAdminSoon(); return; }
-  if (kind === "player" && (p[1] === "ign" || p[1] === "discord")) { const d = playerDoc(p[0]); if (!d) return; d[p[1]] = String(v || "").slice(0, 40); await save(`players/${p[0]}`, d); audit(`Cambió ${p[1] === "ign" ? "el Riot ID" : "el Discord"} de ${d.name}: ${v || "(vacío)"}`); return; }
+  if (kind === "player" && (p[1] === "ign" || p[1] === "discord")) { const d = playerDoc(p[0]); if (!d) return; d[p[1]] = String(v || "").slice(0, 40); await save(`players/${p[0]}`, d); if (p[1] === "ign" && riotOk(v)) setTimeout(() => vsRefresh(p[0], true), 2500); audit(`Cambió ${p[1] === "ign" ? "el Riot ID" : "el Discord"} de ${d.name}: ${v || "(vacío)"}`); return; }
   const desc = describeBind(kind, p, v);
   try {
     if (kind === "cfg") { const d = cfgDoc(); setPath(d, p[0], v); await save("league/config", d); }
@@ -3169,7 +3171,8 @@ async function adminClick(e) {
     else if (act === "p-add") {
       const name = $("#npName").value.trim(); if (!name) { toast("Escribí el nombre del jugador."); return; }
       const ign = normRiot(($("#npIgn") || {}).value); if (ign && !riotOk(ign)) { toast("El Riot ID va como en Valorant: Nombre#TAG."); return; }
-      await save(`players/${newId("p")}`, {name, team: $("#npTeam").value || null, role: $("#npRole").value, rank: $("#npRank").value.trim(), value: null, ...(ign ? {ign} : {})});
+      const npid = newId("p"); await save(`players/${npid}`, {name, team: $("#npTeam").value || null, role: $("#npRole").value, rank: $("#npRank").value.trim(), value: null, ...(ign ? {ign} : {})});
+      if (ign) setTimeout(() => vsRefresh(npid, true), 2500);
       toast(`${name} agregado.`); audit(`Agregó al jugador ${name} (${$("#npTeam").value ? R.teams[$("#npTeam").value].name : "agente libre"} · ${$("#npRole").value})`); renderAdminSoon();
     }
     else if (act === "p-bulk") {
@@ -5072,7 +5075,7 @@ function segPlayerHtml(p, coach) {
   return `<div class="panel pad cut seg-p" style="--tc:${t.c}"><div class="seg-ph"><span class="ava">${esc(p.name.slice(0, 2).toUpperCase())}</span><div><div class="eyebrow">${esc(p.role)} · ${esc(t.name)}</div><h3>${esc(p.name)}</h3></div><span class="sp"></span>${trackerBtn(p.id)}<button class="btn sm ghost" type="button" data-seg-an="${p.id}">Análisis completo</button><button class="x" type="button" data-seg-close aria-label="Cerrar">×</button></div>
     ${n.m ? `<div class="seg-grid"><div><div class="h3" style="font-size:15px">ACS por partido</div>${lineSvg([{n: p.name, c: t.c || "#9085e9", v: n.acsL}, {n: `Promedio de ${av.byRole ? "su rol" : "la liga"}`, c: "#a19cb4", v: n.acsL.map(() => av.acs), dash: true}], lab, {h: 170})}</div>
       <div><div class="h3" style="font-size:15px">Contra el promedio de ${av.byRole ? "su rol" : "la liga"}</div>${cmpBars([["ACS", n.acs, av.acs, v => Math.round(v)], ["K/D", n.kd, av.kd, v => dec(v)], ["Kills cada 10 rondas", n.kpr * 10, av.kpr * 10, v => dec(v)], ["Muertes cada 10 rondas", n.dpr * 10, av.dpr * 10, v => dec(v), false], ["Asist. cada 10 rondas", n.apr * 10, av.apr * 10, v => dec(v)]])}<p class="adm-note">Barra de color: ${esc(p.name)} · barra gris: promedio.</p></div></div>
-      <div class="ins-cols">${insHtml(ins)}</div>` : '<p class="muted">Todavía no jugó partidos esta temporada.</p>'}
+      <div class="ins-cols">${insHtml(ins)}</div>` : '<p class="muted">Todavía no jugó partidos esta temporada.</p>'}${vsHtml(p.id)}
     ${coach ? `<div class="h3" style="font-size:15px;margin-top:16px">${ico("i-chat")} Notas para ${esc(p.name)}</div>${noteForm(p.team, p.id)}<div class="cn-list">${notes.map(x => noteHtml(x, true)).join("") || '<p class="muted">Todavía no le dejaste notas.</p>'}</div>` : ""}</div>`;
 }
 $("#segRoot") && $("#segRoot").addEventListener("change", e => { if (e.target.id === "segTeam") { S.seg.team = e.target.value; S.seg.pid = null; S.seg.edit = null; renderSeg(); } });
@@ -5229,18 +5232,52 @@ const trackerBtn = (pid, cls = "btn sm ghost") => { const g = ignOf(pid);
 function riotIdCard(pid) {
   const g = ignOf(pid), raw = ((M.players[pid] || {}).ign) || "";
   return `<div class="panel pad cut riot-card"><div class="h3">${ico("i-chart")} Tu Riot ID y Tracker</div>
-    <p class="muted">${g ? `Tu perfil de tracker.gg queda en tu ficha para que todos puedan ver tus stats de rankeds.` : "Cargá tu Riot ID (como aparece en Valorant: Nombre#TAG) y tu ficha va a tener el botón a tu perfil de tracker.gg."}</p>
+    <p class="muted">${g ? "Tus rankeds (rango, K/D, headshot, ADR, agentes) se muestran en tu ficha y se actualizan solas cada hora." : "Cargá tu Riot ID (como aparece en Valorant: Nombre#TAG) y tu ficha va a mostrar tu rango y tus stats de rankeds, actualizadas solas."}</p>
     <div class="riot-row"><input class="cell-in" id="riotIn" value="${esc(raw)}" placeholder="Ej: Jagger#LAS" maxlength="22" autocomplete="off" spellcheck="false"><button class="btn sm gold" type="button" id="riotGo">Guardar</button>${g ? `<a class="btn sm ghost" href="${trackerUrl(g)}" target="_blank" rel="noopener noreferrer">${ico("i-chart")}<span>Ver mi Tracker</span></a>` : ""}</div>
-    <small class="muted">Para que tracker.gg muestre tus stats, tu perfil tiene que ser público ahí (entrás con tu cuenta de Riot en tracker.gg y lo activás).</small></div>`;
+    ${vsHtml(pid)}</div>`;
 }
 $("#profRoot") && $("#profRoot").addEventListener("click", async e => {
   if (!e.target.closest("#riotGo")) return;
   const v = normRiot($("#riotIn").value);
   if (v && !riotOk(v)) { toast("Escribilo como en Valorant: Nombre#TAG (por ejemplo Jagger#LAS)."); return; }
   const b = $("#riotGo"); b.disabled = true;
-  try { await api("/api/member", {action: "ign", ign: v}); toast(v ? `Riot ID guardado: ${v}.` : "Riot ID borrado."); } catch (er) { toast(er.message); }
+  try { await api("/api/member", {action: "ign", ign: v}); toast(v ? `Riot ID guardado: ${v}. Buscando tus rankeds…` : "Riot ID borrado."); if (v) setTimeout(() => vsRefresh(myPid(), true), 1500); } catch (er) { toast(er.message); }
   b.disabled = false;
 });
+
+
+/* ================= rankeds de Valorant (desde el Riot ID) ================= */
+// El servidor trae rango, RR, pico y las últimas 20 rankeds de cada jugador con Riot ID (se actualiza solo cada hora).
+const RANK_ES = {Iron: ["Hierro", "#8d8d8d"], Bronze: ["Bronce", "#b98b5b"], Silver: ["Plata", "#c9d3d6"], Gold: ["Oro", "#e8c25a"], Platinum: ["Platino", "#4fb6c8"], Diamond: ["Diamante", "#c08bf2"], Ascendant: ["Ascendente", "#3ccf8a"], Immortal: ["Inmortal", "#e5476b"], Radiant: ["Radiante", "#ffe08a"]};
+const rankEs = r => { if (!r) return null; const [w, n] = String(r).split(" "), x = RANK_ES[w]; return x ? {name: `${x[0]}${n ? " " + n : ""}`, c: x[1]} : {name: String(r), c: "var(--accent-hi)"}; };
+const vsOf = pid => { const v = (S.remote.valstats || {})[pid], g = ignOf(pid); return v && g && v.ign && v.ign.toLowerCase() === g.toLowerCase() ? v : null; };
+const vsBusy = new Set();
+async function vsRefresh(pid, quiet) {
+  if (vsBusy.has(pid)) return; vsBusy.add(pid); if (!quiet) renderVsBlocks(pid);
+  try {
+    const r = await fetch("/api/valstats", {method: "POST", headers: {"content-type": "application/json"}, body: JSON.stringify({pid})});
+    const j = await r.json().catch(() => ({}));
+    if (!quiet) toast(!r.ok ? (j.error || "No se pudo actualizar.") : j.fresh ? `Ya está al día (se puede volver a actualizar en ${j.wait} min).` : j.ok ? "Estadísticas actualizadas." : (j.error || "No se pudo leer esa cuenta."));
+  } catch (e) { if (!quiet) toast("Sin conexión con el servidor."); }
+  vsBusy.delete(pid); if (!quiet) renderVsBlocks(pid);
+}
+function vsHtml(pid) {
+  const g = ignOf(pid); if (!g) return "";
+  const v = vsOf(pid), busy = vsBusy.has(pid), R = v && v.recent, rk = v && rankEs(v.rank), pk = v && v.peak && rankEs(v.peak.rank);
+  const btn = `<button type="button" class="linkish vs-up" data-vs-up="${pid}" ${busy ? "disabled" : ""}>${busy ? "Actualizando…" : "Actualizar"}</button>`;
+  const foot = `<div class="vs-foot"><span>${v ? `Actualizado ${agoTxt(v.at)}` : "Todavía sin datos"} · ${btn}</span><a href="${trackerUrl(g)}" target="_blank" rel="noopener noreferrer">${esc(g)} en Tracker ↗</a></div>`;
+  if (!v) return `<div class="vs-box" data-vs="${pid}"><div class="vs-h">${ico("i-chart")}<b>Rankeds de Valorant (su cuenta)</b></div><p class="muted">${busy ? "Buscando sus partidas…" : "Sus estadísticas de rankeds se cargan solas en la próxima hora, o tocá Actualizar."}</p>${foot}</div>`;
+  if (v.code === "notfound" && !v.recent) return `<div class="vs-box" data-vs="${pid}"><div class="vs-h">${ico("i-chart")}<b>Rankeds de Valorant (su cuenta)</b></div><p class="muted">No se encontró la cuenta <b>${esc(g)}</b>. Revisá que el Riot ID esté bien escrito.</p>${foot}</div>`;
+  const tile = (val, l) => `<div><b>${val == null ? "–" : val}</b><span>${l}</span></div>`;
+  return `<div class="vs-box" data-vs="${pid}"><div class="vs-h">${ico("i-chart")}<b>Rankeds de Valorant (su cuenta)</b>${v.season && v.season.short ? `<small>${esc(v.season.short.toUpperCase())}</small>` : ""}</div>
+    <div class="vs-rank">${rk ? `<span class="vs-tier" style="--rc:${rk.c}"><b>${esc(rk.name)}</b>${v.rr != null ? `<small>${v.rr} RR${v.lastChange ? ` · <i class="${v.lastChange > 0 ? "up" : "dn"}">${v.lastChange > 0 ? "+" : ""}${v.lastChange}</i>` : ""}</small>` : ""}</span>` : `<span class="vs-tier"><b>Sin rango</b><small>no jugó rankeds este acto</small></span>`}
+      ${pk ? `<span class="vs-peak">Pico: <b style="color:${pk.c}">${esc(pk.name)}</b>${v.peak.season ? ` (${esc(v.peak.season.toUpperCase())})` : ""}</span>` : ""}${v.season && v.season.games ? `<span class="vs-peak">Este acto: <b>${v.season.wins}V / ${v.season.games} partidas</b></span>` : ""}</div>
+    ${R && R.games ? `<div class="vs-tiles">${tile(R.kd != null ? dec(R.kd) : null, "K/D")}${tile(R.hs != null ? String(R.hs).replace(".", ",") + "%" : null, "Headshot")}${tile(R.adr, "ADR")}${tile(R.acs, "ACS")}${tile(R.winPct != null ? R.winPct + "%" : null, "Victorias")}</div>
+      <p class="vs-sub">Últimas ${R.games} rankeds${R.agents.length ? ` · Agentes: ${R.agents.map(a => `<b>${esc(a.n)}</b> (${a.c})`).join(", ")}` : ""}${R.lastGame ? ` · última ${agoTxt(R.lastGame)}` : ""}</p>` : `<p class="muted">No tiene rankeds recientes guardadas.</p>`}
+    ${foot}</div>`;
+}
+function renderVsBlocks(pid) { $$(`[data-vs="${pid}"]`).forEach(el => { el.outerHTML = vsHtml(pid); }); }
+document.addEventListener("click", e => { const b = e.target.closest("[data-vs-up]"); if (b) { e.preventDefault(); e.stopPropagation(); vsRefresh(b.dataset.vsUp); } }, true);
 
 /* ================= arranque ================= */
 buildOrbit();

@@ -92,6 +92,7 @@ git push -u origin main
 | `ANTHROPIC_API_KEY` | Opcional (pago). Lee las capturas con Claude; si también está Gemini, queda de respaldo |
 | `ANTHROPIC_MODEL` | Opcional. Modelo de Claude (por defecto `claude-sonnet-5-5`) |
 | `DISCORD_CLIENT_SECRET` | Opcional. Activa *Entrar con Discord* para los jugadores (ver *Jugadores con Discord*) |
+| `HENRIKDEV_API_KEY` | Opcional (gratis). Rango y stats de rankeds de cada jugador desde su Riot ID (ver *Rankeds de Valorant*) |
 
 4. *Deploys* → **Trigger deploy** → *Deploy site*, para que la función tome las variables. Para verificar, abrí `https://TU-SITIO.netlify.app/api/staff`: tiene que decir `"firebase": "conectado"`. Si no, el mensaje te dice qué falta.
 5. En Firebase → Authentication → *Settings* → *Authorized domains*, agregá tu dominio de Netlify (por ejemplo `tu-liga.netlify.app`).
@@ -322,6 +323,15 @@ Si cargás el usuario de Discord de cada jugador (Panel → Jugadores), la cuent
 - **Coaches**: al registrarse (o desde Mi perfil) piden el equipo. Lo aprueba el **capitán de ese equipo** (en su panel) o el **staff** (en Solicitudes). Al aprobarlo, la cuenta se une al coach de la liga con el mismo nombre (o se crea uno) y el equipo empieza a pagarle el sueldo semanal.
 - **Seguimiento** (menú Jugadores): para coaches aprobados (sus equipos), capitanes (su equipo) y staff (todos). Tiene ACS por partido contra el promedio de la liga, K/D y diferencia de rondas, los mejores del equipo, tabla de jugadores con tendencia de los últimos 3 partidos y, por jugador, comparación con el promedio de su rol, fortalezas y qué puede mejorar.
 - **Notas** (solo el coach): generales para el equipo o para cada jugador, de tipo *A mejorar*, *Bien hecho* o *Nota*, y visibles para todo el equipo, solo para ese jugador o solo para el coach (privadas). Las guarda el servidor (`/api/coach`, colección `coachnotes`): cada jugador ve en Mi perfil solo las de su equipo y las suyas.
+
+## Rankeds de Valorant (Riot ID)
+
+Cada jugador puede tener su **Riot ID** (`Nombre#TAG`): lo carga el staff al agregarlo, el capitán en el pedido de alta o el mismo jugador en Mi perfil. Con eso:
+
+- La ficha y el análisis muestran **dos partes**: lo que hizo **en el torneo ONYX** y su cuenta de **Valorant fuera del torneo**: rango y RR actuales, pico, partidas del acto, y de las últimas 20 rankeds K/D, % de headshot, ADR, ACS, % de victorias y agentes más usados. Más el link a su perfil de tracker.gg.
+- Se actualiza **sola cada hora** (función `valstats-cron`, cada 20 minutos actualiza a los más viejos) y con el botón **Actualizar** (máximo una vez cada 10 minutos por jugador).
+- Fuente: API no oficial de HenrikDev (`api.henrikdev.xyz`), que usa el historial público de Riot. Necesita `HENRIKDEV_API_KEY` en Netlify: clave gratis en <https://api.henrikdev.xyz/dashboard> (entrás con Discord → *API Keys* → *Basic*). Sin la clave, solo se ve el link a tracker.gg.
+- tracker.gg no tiene API pública para Valorant, por eso los números no salen de ahí (son los mismos datos de Riot).
 
 ## Economía y dólares
 

@@ -13,7 +13,7 @@ import { createHash } from "node:crypto";
 export const SNAP_V = 1;
 // Colecciones públicas que van al resumen
 export const SNAP_COLLS = ["teams", "logos", "players", "matches", "transfers", "draws", "perf", "prizes", "redeems",
-  "coaches", "salaries", "seasons", "playoffs", "att", "motions"];
+  "coaches", "salaries", "seasons", "playoffs", "att", "motions", "valstats"];
 // Documentos sueltos que van al resumen, con su clave
 export const SNAP_DOCS = { "league/config": "config", "public/pickagg": "pickagg", "public/pickboard": "pickboard" };
 const MAX_JSON = 1000000; // un documento de Firestore puede tener hasta 1 MiB

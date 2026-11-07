@@ -335,6 +335,11 @@ service cloud.firestore {
       allow update, delete: if isUltra();
     }
 
+    // Estadísticas de rankeds de cada jugador (las trae el servidor desde su Riot ID)
+    match /valstats/{pid} {
+      allow read: if true;
+      allow write: if false;
+    }
     // Notas de seguimiento de los coaches: las guarda y las muestra el servidor (cada jugador ve solo las suyas y las de su equipo)
     match /coachnotes/{id} {
       allow read, write: if false;
