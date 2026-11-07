@@ -5,6 +5,7 @@
 //   { action: "att", fecha, s }        confirma si juega la próxima fecha: "si" | "no" | "duda" | null
 //   { action: "pickem", picks }        guarda sus pronósticos { partido: "a" | "b" | null }
 //   { action: "motion", op, ... }      votación de capitán: op = "create" (cand) | "sign" (id) | "vote" (id, v) | "cancel" (id)
+//   { action: "ign", ign }            jugador vinculado: carga o borra su Riot ID (Nombre#TAG), para el botón de Tracker
 //   { action: "coachreq", team, note } pide ser coach de un equipo (lo aprueba el capitán de ese equipo o el staff)
 //   { action: "coachok", id, ok, coachId? }  capitán del equipo o staff: aprueba o rechaza un coach
 import { initAdmin } from "../lib/admin.mjs";
@@ -48,6 +49,14 @@ export default async (req) => {
       const pd = p.data();
       await db.doc(`requests/link_${who.uid}`).set({ type: "link", uid: who.uid, name: who.name, avatar: who.avatar, pid, pname: pd.name || "", team: pd.team || null, at: now, status: "pend", by: who.uid, u: who.name });
       return json(200, { status: "pend" });
+    }
+    if (A === "ign") {
+      const pid = linked(), ign = String(b.ign || "").trim().replace(/\s*#\s*/, "#");
+      if (ign && !/^[^#]{3,16}#[A-Za-z0-9]{2,5}$/.test(ign)) throw err("Escribilo como en Valorant: Nombre#TAG.");
+      await db.doc(`players/${pid}`).set({ ign }, { merge: true });
+      await patchSnapshot(db, [`players/${pid}`]);
+      await db.collection("audit").add({ at: now, uid: who.uid, u: who.name || "jugador", role: "member", txt: `${who.name || "Un jugador"} ${ign ? `cargó su Riot ID: ${ign}` : "borró su Riot ID"}` });
+      return json(200, { ok: true, ign });
     }
     if (A === "coachreq") {
       member();

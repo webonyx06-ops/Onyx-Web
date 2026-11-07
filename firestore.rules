@@ -116,7 +116,8 @@ service cloud.firestore {
     // Solicitudes de capitanes: altas de jugadores, cambios de valor o cláusula, y fichar o dar de baja a un coach
     function coachPath(cid) { return /databases/$(database)/documents/coaches/$(cid); }
     function validPlayerReq(d) {
-      return d.keys().hasOnly(['type', 'team', 'pid', 'name', 'role', 'rank', 'value', 'clause', 'prevValue', 'prevClause', 'by', 'u', 'at', 'status', 'note'])
+      return d.keys().hasOnly(['type', 'team', 'pid', 'name', 'role', 'rank', 'ign', 'value', 'clause', 'prevValue', 'prevClause', 'by', 'u', 'at', 'status', 'note'])
+        && (!('ign' in d) || (d.ign is string && d.ign.size() <= 22))
         && d.value is int && d.value >= 100 && d.value <= 1500
         && d.clause is int && d.clause >= 0 && d.clause <= 3000
         && (

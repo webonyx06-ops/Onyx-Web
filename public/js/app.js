@@ -1369,14 +1369,14 @@ function openPlayer(id) {
   const spokes = axes.map((_, i) => `<line x1="150" y1="150" x2="${pt(i, 1)[0]}" y2="${pt(i, 1)[1]}" stroke="var(--line)"/>`).join("");
   const labels = axes.map(([l], i) => { const [x, y] = pt(i, 1.2); return `<text x="${x}" y="${y}" text-anchor="middle" dominant-baseline="middle" fill="var(--muted)" font-size="11" font-family="JetBrains Mono, monospace">${l}</text>`; }).join("");
   const isCap = p.team && M.teams[p.team].captain === p.id;
-  modal(`<div class="box cut" style="--tc:${t.c}"><div class="bh">${img(tk)}<div><div class="eyebrow">${p.role}${isCap ? " · Capitán" : ""}</div><h3>${esc(p.name)}</h3><div class="muted" style="font-size:14px">${p.team ? esc(TM(p.team).name) : "Agente libre"} · Valor ${fmt(p.value)} · Cat. ${catOf(p.value)}${p.clause ? " · Cláusula " + fmt(p.clause) : ""}</div></div><button class="x" data-close aria-label="Cerrar">×</button></div>
+  modal(`<div class="box cut" style="--tc:${t.c}"><div class="bh">${img(tk)}<div><div class="eyebrow">${p.role}${isCap ? " · Capitán" : ""}</div><h3>${esc(p.name)}</h3><div class="muted" style="font-size:14px">${p.team ? esc(TM(p.team).name) : "Agente libre"} · Valor ${fmt(p.value)} · Cat. ${catOf(p.value)}${p.clause ? " · Cláusula " + fmt(p.clause) : ""}${ignOf(p.id) ? ` · <a class="an-trk" href="${trackerUrl(ignOf(p.id))}" target="_blank" rel="noopener noreferrer">${esc(ignOf(p.id))} ↗</a>` : ""}</div></div><button class="x" data-close aria-label="Cerrar">×</button></div>
     <div class="bb"><svg class="radar" viewBox="0 0 300 300" role="img" aria-label="Perfil de ${esc(p.name)} comparado con el mejor de la liga">${grid}${spokes}
       <polygon class="val" points="${vals.map((v, i) => pt(i, v).join(",")).join(" ")}" fill="${t.c}" fill-opacity=".28" stroke="${t.l}" stroke-width="2"/>${vals.map((v, i) => `<circle cx="${pt(i, v)[0]}" cy="${pt(i, v)[1]}" r="3.5" fill="${t.l}"/>`).join("")}${labels}</svg>
       <p class="muted" style="font-size:12px;text-align:center;margin-top:-6px">Cada eje compara con el mejor de la liga en esa estadística.</p>
       <div class="pstats" style="grid-template-columns:repeat(4,minmax(0,1fr))"><div><b>${s.k}</b><span>Kills</span></div><div><b>${s.a}</b><span>Asist.</span></div><div><b>${dec(s.kd)}</b><span>K/D</span></div><div><b>${s.acs}</b><span>ACS</span></div></div>
       ${playerPerfHtml(p)}${careerHtml(p.id)}
       <div class="loglist">${p.log.map(e => `<div><span class="mono muted">F${e.f}${e.lg ? " " + e.lg : ""}</span><span style="display:flex;gap:6px;align-items:center">${img(e.vs)}${esc(TM(e.vs).name)}</span><span class="mono">${e.k}/${e.d}/${e.a}</span><span class="mono" style="color:${e.won ? "var(--win)" : "var(--loss)"}">${e.score}</span></div>`).join("") || '<span class="muted">Sin partidos jugados.</span>'}</div>
-      <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn" data-an-modal="${p.id}">Ver análisis completo</button><button class="btn ghost" type="button" data-share="jugador:${p.id}" data-title="${esc(p.name)}">${ico("i-share")}<span>Compartir</span></button>${capTeam() && p.team !== capTeam() ? `<button class="btn gold" data-offer-modal="${p.id}">Hacer una oferta</button>` : ""}</div></div></div>`);
+      <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn" data-an-modal="${p.id}">Ver análisis completo</button><button class="btn ghost" type="button" data-share="jugador:${p.id}" data-title="${esc(p.name)}">${ico("i-share")}<span>Compartir</span></button>${trackerBtn(p.id, "btn ghost")}${capTeam() && p.team !== capTeam() ? `<button class="btn gold" data-offer-modal="${p.id}">Hacer una oferta</button>` : ""}</div></div></div>`);
   const ob = $("[data-offer-modal]"); if (ob) ob.addEventListener("click", () => { closeModal(); openOffer(p.id); });
   const ab = $("[data-an-modal]"); if (ab) ab.addEventListener("click", () => { closeModal(); openAnalysis(p.id); });
 }
@@ -1562,7 +1562,7 @@ function renderAnalysis() {
   const others = D.P.filter(q => q.id !== p.id && q.s.m).sort((a, b) => a.name.localeCompare(b.name, "es"));
   root.innerHTML = `<div class="an" role="dialog" aria-modal="true" aria-label="Análisis de ${esc(p.name)}"><div class="an-panel" tabindex="-1" style="--tc:${t.c}">
     <div class="an-head">${img(p.lastTeam)}<div class="an-who"><div class="eyebrow">${p.role}${isCap ? " · Capitán" : ""} · ${p.team ? esc(TM(p.team).name) : "Agente libre"}${p.rank ? " · " + esc(p.rank) : ""}</div><h2>${esc(p.name)}</h2>
-      <div class="an-tags">${prof.tags.map(g => `<span>${esc(g)}</span>`).join("")}</div></div>
+      <div class="an-tags">${prof.tags.map(g => `<span>${esc(g)}</span>`).join("")}${ignOf(p.id) ? `<a class="an-trk" href="${trackerUrl(ignOf(p.id))}" target="_blank" rel="noopener noreferrer">${esc(ignOf(p.id))} · Tracker ↗</a>` : ""}</div></div>
       <div class="an-rating" title="Rating ONYX: combina ACS, K/D, kills, asistencias, supervivencia, victorias y asistencia a fechas, comparado con toda la liga (0 a 100)"><b>${rating ?? "–"}</b><span>Rating ONYX</span></div>
       <button class="x" data-an-close aria-label="Cerrar">×</button></div>
     <div class="an-body">
@@ -1964,7 +1964,7 @@ const ADM_TABS = [["inicio","Inicio","Resumen"],["solicitudes","Solicitudes","Re
 const ULTRA_TABS = ["tabla", "general", "staff", "seguridad", "bot"];
 const ADM_ICON = {inicio: "i-grid", solicitudes: "i-inbox", partidos: "i-calendar", resultados: "i-check", tabla: "i-table", playoffs: "i-trophy", mapas: "i-map", jugadores: "i-users", rendimiento: "i-pulse", equipos: "i-shield", mercado: "i-coins", coaches: "i-whistle", canjes: "i-gift", economia: "i-wallet", fairplay: "i-scale", general: "i-sliders", staff: "i-key", seguridad: "i-lock", bot: "i-bot"};
 const ico = (id, cls = "") => `<svg class="ic ${cls}" aria-hidden="true"><use href="#${id}"/></svg>`;
-const ULTRA_ACTS = new Set(["bk-create","bk-dl","bk-restore","bk-upload","acc-revoke","season-close","po-del","lg-del","coach-del","cj-add","cj-pdel","cj-del","tbl-form","tbl-reset","team-add","team-del","team-hide","team-restore","logo-del","m-del","p-del","tr-del","map-del","map-add","used-reset-all","wipe-results","wipe-players","wipe-market","ex-copy","window-new","acc-add","acc-reset","acc-del","fixture-gen","cap-add","cap-reset","cap-del","acc-import"]);
+const ULTRA_ACTS = new Set(["bk-create","bk-dl","bk-restore","bk-upload","acc-revoke","season-close","po-del","lg-del","coach-del","cj-add","cj-pdel","cj-del","tbl-form","tbl-reset","team-add","team-del","team-hide","team-restore","logo-del","m-del","p-del","tr-del","map-del","map-add","used-reset-all","wipe-results","wipe-players","wipe-market","ex-copy","window-new","acc-add","acc-reset","acc-del","fixture-gen","fx-open","fecha-del","fecha-del-all","cap-add","cap-reset","cap-del","acc-import"]);
 $("#adminBtn").addEventListener("click", () => openAdmin());
 $("#staffLink").addEventListener("click", () => { if (S.captain) openCap(); else openAdmin(); });
 $("#capBtn").addEventListener("click", () => openCap());
@@ -2020,16 +2020,19 @@ function admPartidos(R, Dr) {
     ${fld("Fecha N°", `<input id="nmF" type="number" min="1" value="${Dr.nextF || Dr.fechas + 1 || 1}">`)}${fld("Equipo A", `<select id="nmA">${teamOpts(TEAM_KEYS[0])}</select>`)}${fld("Equipo B", `<select id="nmB">${teamOpts(TEAM_KEYS[1])}</select>`)}
     <label class="fld"><span id="nmDateL">${iv ? "Día y hora de la ida" : "Día y hora"}</span><input id="nmDate" type="datetime-local"></label>
     <label class="fld" id="nmDate2W" ${iv ? "" : "hidden"}><span>Día y hora de la vuelta</span><input id="nmDate2" type="datetime-local"></label></div>
-    <div class="rowbtns"><button class="btn sm" data-act="m-add" id="nmGo">${iv ? "Agregar ida y vuelta" : "Agregar partido"}</button>${!ms.length ? `<button class="btn sm gold ultra-only" data-act="fixture-gen" id="nmGen">${iv ? "Generar fixture todos contra todos (ida y vuelta)" : "Generar fixture todos contra todos"}</button>` : ""}
+    <div class="rowbtns"><button class="btn sm" data-act="m-add" id="nmGo">${iv ? "Agregar ida y vuelta" : "Agregar partido"}</button>
       <span class="adm-note" id="nmNote">${iv ? "Se crean los dos partidos de la fecha: la ida (A vs B) y la vuelta (B vs A). Cada uno tiene sus propias stats y cada capitán elige el mapa de uno de los dos." : "Se crea un solo partido."}</span></div></div>`;
   const byF = {}; ms.forEach(m => (byF[m.fecha] = byF[m.fecha] || []).push(m));
   const list = Object.keys(byF).map(Number).sort((a, b) => a - b).map(f => {
     const credited = R.cfg.credited.includes(f), allPlayed = byF[f].every(m => m.status === "played");
     return `<div class="adm-card"><h3>Fecha ${f} <small>${byF[f].filter(m => m.status === "played").length}/${byF[f].length} jugados</small><span style="flex:1"></span>
-      <button class="btn sm ${credited ? "ghost" : ""}" data-act="credit:${f}" ${credited || !allPlayed ? "disabled" : ""} title="${!allPlayed ? "Se habilita cuando todos los partidos de la fecha estén jugados" : ""}">${credited ? "Coins acreditados" : "Acreditar coins de la fecha"}</button></h3>
+      <button class="btn sm ghost danger ultra-only" data-act="fecha-del:${f}">Borrar fecha</button><button class="btn sm ${credited ? "ghost" : ""}" data-act="credit:${f}" ${credited || !allPlayed ? "disabled" : ""} title="${!allPlayed ? "Se habilita cuando todos los partidos de la fecha estén jugados" : ""}">${credited ? "Coins acreditados" : "Acreditar coins de la fecha"}</button></h3>
       <div style="display:grid;gap:6px">${byCruce(byF[f]).map(m => admMatchRow(R, Dr, m, allP)).join("")}</div></div>`;
   }).join("");
-  return quick + add + (list || `<div class="adm-card"><p class="adm-note">Todavía no hay partidos.</p></div>`);
+  const gen = `<div class="adm-card ultra-only"><h3>${ico("i-calendar")} Fixture de la temporada <small>solo ultra staff</small></h3>
+    <p class="adm-note">Sorteá todas las fechas de una vez: todos contra todos 2 veces (o las que quieras), en fechas distintas, con local y visitante parejos. Antes de crear ves cómo queda y podés sortear de nuevo.${ms.length ? ` Ya hay ${Dr.fechas} fecha${Dr.fechas === 1 ? "" : "s"}: las nuevas se agregan a continuación (o borrá todo y empezá de cero).` : ""}</p>
+    <div class="rowbtns"><button class="btn sm gold" data-act="fx-open">${ico("i-swap")}<span>Generar todas las fechas</span></button>${ms.length ? `<button class="btn sm danger" data-act="fecha-del-all">Borrar todas las fechas</button>` : ""}</div></div>`;
+  return gen + quick + add + (list || `<div class="adm-card"><p class="adm-note">Todavía no hay partidos.</p></div>`);
 }
 function admMatchRow(R, Dr, m, allP) {
   const open = S.adm.openMatch === m.id, A = R.teams[m.a] || {name: "?"}, B = R.teams[m.b] || {name: "?"};
@@ -2067,9 +2070,9 @@ function admStatsTable(R, m, allP) {
 function admJugadores(R, Dr) {
   const ps = Object.entries(R.players).map(([id, p]) => ({id, ...p})).filter(p => S.adm.pTeam === "all" || (S.adm.pTeam === "free" ? !p.team : p.team === S.adm.pTeam))
     .sort((a, b) => (a.team || "zz").localeCompare(b.team || "zz") || ROLES.indexOf(a.role) - ROLES.indexOf(b.role) || (a.name || "").localeCompare(b.name || ""));
-  const add = `<div class="adm-card"><h3>Agregar jugadores</h3><div class="fgrid">${fld("Nombre", `<input id="npName" maxlength="40" placeholder="Ej: Jagger" autocomplete="off">`)}${fld("Equipo", `<select id="npTeam">${teamOpts(S.adm.pTeam !== "all" && S.adm.pTeam !== "free" ? S.adm.pTeam : "", true)}</select>`)}${fld("Rol", `<select id="npRole">${roleOpts("Duelista")}</select>`)}${fld("Rango (opcional)", `<input id="npRank" placeholder="Inmortal 1" autocomplete="off">`)}</div>
+  const add = `<div class="adm-card"><h3>Agregar jugadores</h3><div class="fgrid">${fld("Nombre", `<input id="npName" maxlength="40" placeholder="Ej: Jagger" autocomplete="off">`)}${fld("Equipo", `<select id="npTeam">${teamOpts(S.adm.pTeam !== "all" && S.adm.pTeam !== "free" ? S.adm.pTeam : "", true)}</select>`)}${fld("Rol", `<select id="npRole">${roleOpts("Duelista")}</select>`)}${fld("Rango (opcional)", `<input id="npRank" placeholder="Inmortal 1" autocomplete="off">`)}${fld("Riot ID (para Tracker)", `<input id="npIgn" placeholder="Jagger#LAS" maxlength="22" autocomplete="off" spellcheck="false">`)}</div>
     <div class="rowbtns"><button class="btn sm gold" data-act="p-add">Agregar jugador</button></div>
-    ${fld("O pegá varios nombres, uno por línea (van al equipo y rol elegidos)", `<textarea id="npBulk" rows="3" placeholder="Jagger&#10;Nova&#10;..."></textarea>`)}
+    ${fld("O pegá varios, uno por línea: nombre y Riot ID separados por coma (van al equipo y rol elegidos)", `<textarea id="npBulk" rows="3" placeholder="Jagger, Jagger#LAS&#10;Nova, Nova#ARG&#10;..."></textarea>`)}
     <div class="rowbtns"><button class="btn sm" data-act="p-bulk">Agregar todos</button></div></div>`;
   const filt = `<div class="rowbtns">${[["all", "Todos"], ...TEAM_KEYS.map(k => [k, R.teams[k].name]), ["free", "Libres"]].map(([k, l]) => `<button class="chip ${S.adm.pTeam === k ? "on" : ""}" data-act="pteam:${k}" style="padding-left:10px">${esc(l)}</button>`).join("")}</div>`;
   const rows = ps.map(p => { const b = f => `player:${p.id}:${f}`, dp = Dr.PM[p.id];
@@ -2108,7 +2111,7 @@ function reqText(R, r) {
   if (r.type === "link") return `Vincular la cuenta <b>${esc(r.name || "?")}</b> con el jugador <b>${esc(r.pname || "?")}</b>${r.team ? " de " + esc(t) : " (libre)"}`;
   if (r.type === "coach") return `Fichar al coach <b>${esc(r.name || "?")}</b> en ${esc(t)} · sueldo <b class="mono">${fmt(coachCfg().salary)}</b> coins por semana`;
   if (r.type === "coachOut") return `Dar de baja al coach <b>${esc(r.name || "?")}</b> de ${esc(t)}`;
-  if (r.type === "add") return `Agregar a <b>${esc(r.name)}</b> en ${esc(t)} · ${esc(r.role || "")}${r.rank ? " · " + esc(r.rank) : ""} · valor <b class="mono">${fmt(r.value)}</b> · cláusula <b class="mono">${r.clause ? fmt(r.clause) : "sin cláusula"}</b>`;
+  if (r.type === "add") return `Agregar a <b>${esc(r.name)}</b> en ${esc(t)} · ${esc(r.role || "")}${r.rank ? " · " + esc(r.rank) : ""}${r.ign ? " · " + esc(r.ign) : ""} · valor <b class="mono">${fmt(r.value)}</b> · cláusula <b class="mono">${r.clause ? fmt(r.clause) : "sin cláusula"}</b>`;
   const p = R.players[r.pid], nm = p ? p.name : r.name || "jugador borrado";
   const dv = r.prevValue != null && r.prevValue !== r.value ? `${fmt(r.prevValue)} → ` : "", dc = (+r.prevClause || 0) !== (+r.clause || 0) ? `${+r.prevClause ? fmt(r.prevClause) : "sin cláusula"} → ` : "";
   return `Cambiar a <b>${esc(nm)}</b> (${esc(t)}): valor <b class="mono">${dv}${fmt(r.value)}</b> · cláusula <b class="mono">${dc}${r.clause ? fmt(r.clause) : "sin cláusula"}</b>`;
@@ -2882,7 +2885,7 @@ function renderCap() {
     main = `<div class="adm-card"><h3>Plantel de ${esc(t.name)} <small>${rs.length} jugadores</small></h3>
         <div class="cap-roster">${rs.map(row).join("") || '<p class="adm-note">Tu equipo todavía no tiene jugadores. Agregalos abajo.</p>'}</div></div>
       <div class="adm-card"><h3>Agregar un jugador</h3><div class="fgrid">
-        ${fld("Nombre", `<input id="caN" maxlength="30" placeholder="Nick del jugador" autocomplete="off">`)}${fld("Rol", `<select id="caR">${roleOpts("Duelista")}</select>`)}${fld("Rango (opcional)", `<input id="caK" maxlength="30" placeholder="Ej: Inmortal 1" autocomplete="off">`)}
+        ${fld("Nombre", `<input id="caN" maxlength="30" placeholder="Nick del jugador" autocomplete="off">`)}${fld("Rol", `<select id="caR">${roleOpts("Duelista")}</select>`)}${fld("Rango (opcional)", `<input id="caK" maxlength="30" placeholder="Ej: Inmortal 1" autocomplete="off">`)}${fld("Riot ID (para Tracker)", `<input id="caI" maxlength="22" placeholder="Ej: Jagger#LAS" autocomplete="off" spellcheck="false">`)}
         ${fld("Valor", `<input id="caV" type="number" min="${CAP_VAL_MIN}" max="${CAP_VAL_MAX}" step="50" value="500">`)}${fld("Cláusula de rescisión", `<input id="caC" type="number" min="0" max="${CAP_CLAUSE_MAX}" step="50" value="0">`)}</div>
         <div class="rowbtns"><button class="btn sm gold" data-cap-act="send-add">Enviar al staff</button><span class="adm-note">${ranges}</span></div></div>
       <div class="adm-card"><h3>Tus solicitudes <small>${reqs.filter(r => r.status === "pend").length} esperando al staff</small></h3><div style="display:grid;gap:6px">
@@ -2934,12 +2937,13 @@ $("#capRoot").addEventListener("click", async e => {
     else if (act === "coach-req") { const cid = ($("#ccSel") || {}).value; if (cid) { b.disabled = true; await requestCoach(cid, "coach"); renderCap(); } }
     else if (act === "coach-out") { if (!arm(b)) return; await requestCoach(arg, "coachOut"); renderCap(); }
     else if (act === "send-add") {
-      const name = ($("#caN").value || "").trim(), rank = ($("#caK").value || "").trim(), role = $("#caR").value;
+      const name = ($("#caN").value || "").trim(), rank = ($("#caK").value || "").trim(), role = $("#caR").value, ign = normRiot(($("#caI") || {}).value);
+      if (ign && !riotOk(ign)) { toast("El Riot ID va como en Valorant: Nombre#TAG."); return; }
       if (name.length < 2) { toast("Escribí el nombre del jugador (al menos 2 letras)."); return; }
       const value = capNum("#caV", CAP_VAL_MIN, CAP_VAL_MAX, "El valor"); if (value == null) return;
       const clause = capNum("#caC", 0, CAP_CLAUSE_MAX, "La cláusula"); if (clause == null) return;
       b.disabled = true;
-      await save(`requests/${newId("q")}`, {...capReqBase(), type: "add", pid: null, name: name.slice(0, 30), role, rank: rank.slice(0, 30), value, clause});
+      await save(`requests/${newId("q")}`, {...capReqBase(), type: "add", pid: null, name: name.slice(0, 30), role, rank: rank.slice(0, 30), value, clause, ...(ign ? {ign} : {})});
       toast(`Pediste agregar a ${name}. El staff lo revisa.`); renderCap();
     }
     else if (act === "cancel") { if (!arm(b)) return; await save(`requests/${arg}`, null, "del"); toast("Solicitud cancelada."); }
@@ -2965,7 +2969,6 @@ $("#adminRoot").addEventListener("click", e => {
   const set = (id, fn) => { const el = $(id); if (el) fn(el); };
   set("#nmDate2W", el => { el.hidden = !iv; }); set("#nmDateL", el => { el.textContent = iv ? "Día y hora de la ida" : "Día y hora"; });
   set("#nmGo", el => { el.textContent = iv ? "Agregar ida y vuelta" : "Agregar partido"; });
-  set("#nmGen", el => { el.textContent = iv ? "Generar fixture todos contra todos (ida y vuelta)" : "Generar fixture todos contra todos"; });
   set("#nmNote", el => { el.textContent = iv ? "Se crean los dos partidos de la fecha: la ida (A vs B) y la vuelta (B vs A). Cada uno tiene sus propias stats y cada capitán elige el mapa de uno de los dos." : "Se crea un solo partido."; });
 });
 $("#adminRoot").addEventListener("change", async e => {
@@ -3142,6 +3145,9 @@ async function adminClick(e) {
       }
       toast(`Fixture creado: ${n} partidos en ${fd0.length} fechas${iv ? " (ida y vuelta)" : ""}.`); audit(`Generó el fixture todos contra todos${iv ? " ida y vuelta" : ""} (${n} partidos)`); renderAdminSoon();
     }
+    else if (act === "fx-open") { openFixtureGen(); }
+    else if (act === "fecha-del") { await deleteFechas([+a[0]]); }
+    else if (act === "fecha-del-all") { await deleteFechas(null); }
     else if (act === "m-del") { if (!arm(b)) return; const md = S.remote.matches[a[0]]; await save(`matches/${a[0]}`, null, "del"); if (md) audit(`Borró el partido ${matchLabel(R, md)}${md.status === "played" ? ` (${md.ra}-${md.rb})` : ""}`); S.adm.openMatch = null; toast("Partido borrado."); renderAdminSoon(); }
     else if (act === "credit") {
       const f = +a[0], Dr = deriveFor(R), C = R.cfg.coin, add = Object.fromEntries(TEAM_KEYS.map(k => [k, 0]));
@@ -3162,13 +3168,15 @@ async function adminClick(e) {
     }
     else if (act === "p-add") {
       const name = $("#npName").value.trim(); if (!name) { toast("Escribí el nombre del jugador."); return; }
-      await save(`players/${newId("p")}`, {name, team: $("#npTeam").value || null, role: $("#npRole").value, rank: $("#npRank").value.trim(), value: null});
+      const ign = normRiot(($("#npIgn") || {}).value); if (ign && !riotOk(ign)) { toast("El Riot ID va como en Valorant: Nombre#TAG."); return; }
+      await save(`players/${newId("p")}`, {name, team: $("#npTeam").value || null, role: $("#npRole").value, rank: $("#npRank").value.trim(), value: null, ...(ign ? {ign} : {})});
       toast(`${name} agregado.`); audit(`Agregó al jugador ${name} (${$("#npTeam").value ? R.teams[$("#npTeam").value].name : "agente libre"} · ${$("#npRole").value})`); renderAdminSoon();
     }
     else if (act === "p-bulk") {
       const names = $("#npBulk").value.split("\n").map(s => s.trim()).filter(Boolean); if (!names.length) { toast("Pegá al menos un nombre."); return; }
       const team = $("#npTeam").value || null, role = $("#npRole").value;
-      for (const name of names) await save(`players/${newId("p")}`, {name, team, role, rank: "", value: null});
+      for (const line of names) { const [nm, rid] = line.split(/\s*[,;\t|]\s*/), ign = normRiot(rid || (riotOk(nm) ? nm : "")); const name = (riotOk(nm) && !rid ? nm.split("#")[0] : nm).trim();
+        await save(`players/${newId("p")}`, {name, team, role, rank: "", value: null, ...(riotOk(ign) ? {ign} : {})}); }
       toast(`${names.length} jugadores agregados.`); audit(`Agregó ${names.length} jugadores a ${team ? R.teams[team].name : "agentes libres"}: ${names.join(", ")}`); renderAdminSoon();
     }
     else if (act === "p-del") { if (!arm(b)) return; const pid = a[0]; const pn = (R.players[pid] || {}).name; await save(`players/${pid}`, null, "del"); audit(`Borró al jugador ${pn}`);
@@ -3210,7 +3218,7 @@ async function reviewRequest(id, ok) {
     await save(`coaches/${r.coach}`, c);
   } else if (ok) {
     if (r.type === "add") {
-      await save(`players/${newId("p")}`, {name: r.name, team: r.team, role: ROLES.includes(r.role) ? r.role : "Flex", rank: r.rank || "", value: +r.value, clause: +r.clause || 0});
+      await save(`players/${newId("p")}`, {name: r.name, team: r.team, role: ROLES.includes(r.role) ? r.role : "Flex", rank: r.rank || "", value: +r.value, clause: +r.clause || 0, ...(riotOk(r.ign) ? {ign: normRiot(r.ign)} : {})});
     } else {
       const d = playerDoc(r.pid);
       if (!d) { toast("Ese jugador ya no existe. Rechazá la solicitud."); return; }
@@ -4422,7 +4430,7 @@ function renderProfile() {
   const side = `<div class="panel pad cut"><div class="h3">${ico("i-target")} Pronósticos</div><p class="muted">${mine ? `Vas <b>${mine.pos}°</b> con <b>${mine.pts}</b> punto${mine.pts === 1 ? "" : "s"} (${mine.hits} de ${mine.n} aciertos).` : "Todavía no sumaste puntos. Elegí quién gana cada partido de la fecha."}</p><a class="btn sm gold" href="#pronosticos">Hacer mis pronósticos</a></div>
     <div class="panel pad cut"><div class="h3">${ico("i-crown")} Capitanía de ${k ? esc(TM(k).name) : "tu equipo"}</div><p class="muted">${mot ? (mot.status === "firmas" ? `Hay una moción para que <b>${esc(mot.candName)}</b> sea capitán: junta firmas.` : `Se está votando si <b>${esc(mot.candName)}</b> pasa a ser capitán.`) : "No hay votaciones abiertas en tu equipo."}</p><a class="btn sm" href="#capitania">Ir a la votación</a></div>
     <div class="panel pad cut"><button class="linkish" id="profUnlink" type="button">Desvincular mi cuenta de ${esc(p.name)}</button></div>`;
-  root.innerHTML = head + `<div class="prof-grid"><div class="prof-main">${att}${stats}${k ? playerCoachHtml(pid) : ""}</div><div class="prof-side">${myCoachTeams().length || S.myCoachReq ? coachProfileHtml() : ""}${side}</div></div>`;
+  root.innerHTML = head + `<div class="prof-grid"><div class="prof-main">${att}${stats}${riotIdCard(pid)}${k ? playerCoachHtml(pid) : ""}</div><div class="prof-side">${myCoachTeams().length || S.myCoachReq ? coachProfileHtml() : ""}${side}</div></div>`;
   $("#profOut").addEventListener("click", memberLogout);
 }
 $("#profRoot") && $("#profRoot").addEventListener("click", async e => {
@@ -4684,6 +4692,7 @@ function exportIcs(list, label) {
 S.px = {team: "all", show: "all"};
 function renderPartidos() {
   const root = $("#pxRoot"); if (!root) return;
+  const ut = $("#pxUltra"); if (ut) ut.hidden = !isUltra();
   const sel = $("#pxTeam");
   if (sel) { const v = S.px.team; sel.innerHTML = opt("all", "Todos los equipos", v === "all") + TEAM_KEYS.map(k => opt(k, TM(k).name, v === k)).join(""); if (!TEAM_KEYS.includes(v)) S.px.team = "all"; }
   $$("#pxShow button").forEach(b => b.classList.toggle("on", b.dataset.show === S.px.show));
@@ -4696,15 +4705,18 @@ function renderPartidos() {
       <span class="px-t r ${won === "b" ? "win" : won ? "lose" : ""}"><b>${esc(TM(g.b).name)}</b>${img(g.b)}</span>
       <small>${g.status === "played" ? `${g.map ? esc(g.map) + " · " : ""}${g.noShow ? "W.O." : g.ot ? "Prórroga" : "Final"}` : g.date ? fmtDate(g.date) : "A confirmar"}</small></button>`; }).join("")}</div>`;
   root.innerHTML = fs.map(f => { const gs = cruceGroups(list.filter(m => m.fecha === f)), anyP = D.played.some(m => m.fecha === f), d = list.find(m => m.fecha === f && m.date);
-    return `<section class="px-f"><header><h3>Fecha ${f}</h3><span class="muted">${d ? fmtDate(d.date, false) : ""}</span><span class="sp"></span>${anyP ? `<button class="btn sm ghost" data-px-img="${f}">${ico("i-image")}<span>Imagen de la fecha</span></button>` : ""}</header><div class="px-list">${gs.map(card).join("")}</div></section>`; }).join("")
+    return `<section class="px-f"><header><h3>Fecha ${f}</h3><span class="muted">${d ? fmtDate(d.date, false) : ""}</span><span class="sp"></span>${isUltra() ? `<button class="btn sm ghost px-del" data-px-del="${f}">Borrar fecha</button>` : ""}${anyP ? `<button class="btn sm ghost" data-px-img="${f}">${ico("i-image")}<span>Imagen de la fecha</span></button>` : ""}</header><div class="px-list">${gs.map(card).join("")}</div></section>`; }).join("")
     || `<p class="empty">${okMs().length ? "No hay partidos con ese filtro." : "Todavía no hay fixture."}</p>`;
 }
 $("#pxRoot") && $("#pxRoot").addEventListener("click", e => {
   const g = e.target.closest("[data-mid]"); if (g) { openMatch(g.dataset.mid); return; }
   const im = e.target.closest("[data-px-img]"); if (im) shareImage("fecha", {f: +im.dataset.pxImg});
+  const dl = e.target.closest("[data-px-del]"); if (dl) deleteFechas([+dl.dataset.pxDel]);
 });
 $("#pxTeam") && $("#pxTeam").addEventListener("change", e => { S.px.team = e.target.value; renderPartidos(); });
 $("#pxShow") && $("#pxShow").addEventListener("click", e => { const b = e.target.closest("[data-show]"); if (b) { S.px.show = b.dataset.show; renderPartidos(); } });
+$("#pxGen") && $("#pxGen").addEventListener("click", () => openFixtureGen());
+$("#pxDelAll") && $("#pxDelAll").addEventListener("click", () => deleteFechas(null));
 $("#pxIcs") && $("#pxIcs").addEventListener("click", () => { const k = S.px.team; exportIcs(D.pending.filter(m => k === "all" || m.a === k || m.b === k), k === "all" ? "fixture" : k); });
 
 // ---------- centro del partido ----------
@@ -5057,7 +5069,7 @@ function noteForm(k, pid) {
 function segPlayerHtml(p, coach) {
   const ins = insights(p), n = ins.n, av = ins.av, t = TM(p.team), notes = coach ? S.cn.notes.filter(x => x.pid === p.id) : [];
   const lab = n.L.map(e => `F${e.f}${e.lg ? e.lg[0].toLowerCase() : ""}`);
-  return `<div class="panel pad cut seg-p" style="--tc:${t.c}"><div class="seg-ph"><span class="ava">${esc(p.name.slice(0, 2).toUpperCase())}</span><div><div class="eyebrow">${esc(p.role)} · ${esc(t.name)}</div><h3>${esc(p.name)}</h3></div><span class="sp"></span><button class="btn sm ghost" type="button" data-seg-an="${p.id}">Análisis completo</button><button class="x" type="button" data-seg-close aria-label="Cerrar">×</button></div>
+  return `<div class="panel pad cut seg-p" style="--tc:${t.c}"><div class="seg-ph"><span class="ava">${esc(p.name.slice(0, 2).toUpperCase())}</span><div><div class="eyebrow">${esc(p.role)} · ${esc(t.name)}</div><h3>${esc(p.name)}</h3></div><span class="sp"></span>${trackerBtn(p.id)}<button class="btn sm ghost" type="button" data-seg-an="${p.id}">Análisis completo</button><button class="x" type="button" data-seg-close aria-label="Cerrar">×</button></div>
     ${n.m ? `<div class="seg-grid"><div><div class="h3" style="font-size:15px">ACS por partido</div>${lineSvg([{n: p.name, c: t.c || "#9085e9", v: n.acsL}, {n: `Promedio de ${av.byRole ? "su rol" : "la liga"}`, c: "#a19cb4", v: n.acsL.map(() => av.acs), dash: true}], lab, {h: 170})}</div>
       <div><div class="h3" style="font-size:15px">Contra el promedio de ${av.byRole ? "su rol" : "la liga"}</div>${cmpBars([["ACS", n.acs, av.acs, v => Math.round(v)], ["K/D", n.kd, av.kd, v => dec(v)], ["Kills cada 10 rondas", n.kpr * 10, av.kpr * 10, v => dec(v)], ["Muertes cada 10 rondas", n.dpr * 10, av.dpr * 10, v => dec(v), false], ["Asist. cada 10 rondas", n.apr * 10, av.apr * 10, v => dec(v)]])}<p class="adm-note">Barra de color: ${esc(p.name)} · barra gris: promedio.</p></div></div>
       <div class="ins-cols">${insHtml(ins)}</div>` : '<p class="muted">Todavía no jugó partidos esta temporada.</p>'}
@@ -5101,6 +5113,134 @@ async function reviewCoachReg(id, ok, b) {
   try { await api("/api/member", {action: "coachok", id, ok}); toast(ok ? "Coach aprobado: ya puede usar Seguimiento." : "Pedido rechazado."); }
   catch (er) { toast(er.message); if (b) b.disabled = false; }
 }
+
+
+/* ================= fixture: generar la temporada y borrar fechas (ultra) ================= */
+// Sorteo de todos contra todos: el orden de los equipos se sortea, cada vuelta usa el método del círculo
+// (cada equipo juega una vez por fecha y, si son impares, descansa una vez por vuelta) y en la vuelta siguiente
+// se invierte quién es local. Las vueltas se ordenan para que un mismo cruce nunca se repita en fechas seguidas.
+const rnd = n => { try { const u = new Uint32Array(1); crypto.getRandomValues(u); return u[0] % n; } catch (e) { return Math.floor(Math.random() * n); } };
+const shuffled = a => { const b = [...a]; for (let i = b.length - 1; i > 0; i--) { const j = rnd(i + 1); [b[i], b[j]] = [b[j], b[i]]; } return b; };
+const pairKey = (x, y) => [x, y].sort().join("~");
+function circle(keys) {
+  const a = keys.length % 2 ? [...keys, null] : [...keys], n = a.length, out = [];
+  for (let r = 0; r < n - 1; r++) {
+    const ms = []; let bye = null;
+    for (let i = 0; i < n / 2; i++) { const x = a[i], y = a[n - 1 - i];
+      if (x === null) bye = y; else if (y === null) bye = x; else ms.push((i === 0 ? r % 2 : i % 2) ? [y, x] : [x, y]); }
+    out.push({ms, bye}); a.splice(1, 0, a.pop());
+  }
+  return out;
+}
+function planSeason(keys, rounds = 2) {
+  if (keys.length < 2) return [];
+  const base = circle(shuffled(keys));
+  const out = [];
+  for (let r = 0; r < rounds; r++) {
+    const flip = r % 2 === 1;
+    let order = shuffled(base.map((_, i) => i));
+    // que el primer cruce de esta vuelta no sea uno de la última fecha de la anterior
+    const last = out.length ? new Set(out[out.length - 1].ms.map(([a, b]) => pairKey(a, b))) : null;
+    for (let t = 0; t < 300 && last && base[order[0]].ms.some(([a, b]) => last.has(pairKey(a, b))); t++) order = shuffled(order);
+    order.forEach(i => out.push({ms: base[i].ms.map(([a, b]) => flip ? [b, a] : [a, b]), bye: base[i].bye, round: r + 1}));
+  }
+  return out;
+}
+// Días y horas: primera fecha + días entre fechas; dentro de la fecha, un partido cada "gap" minutos
+function planDates(plan, {start, hour, gap, every, legs}) {
+  if (!start) return plan.map(fd => fd.ms.map(() => legs ? ["", ""] : [""]));
+  const [y, mo, d] = start.split("-").map(Number), [h, mi] = (hour || "21:00").split(":").map(Number);
+  const iso = t => { const x = new Date(t); return `${x.getUTCFullYear()}-${String(x.getUTCMonth() + 1).padStart(2, "0")}-${String(x.getUTCDate()).padStart(2, "0")}T${String(x.getUTCHours()).padStart(2, "0")}:${String(x.getUTCMinutes()).padStart(2, "0")}`; };
+  return plan.map((fd, f) => { const t0 = Date.UTC(y, mo - 1, d + f * (every || 7), h || 0, mi || 0); let k = 0;
+    return fd.ms.map(() => legs ? [iso(t0 + (k++) * gap * 60000), iso(t0 + (k++) * gap * 60000)] : [iso(t0 + (k++) * gap * 60000)]); });
+}
+S.fx = {rounds: 2, legs: false, start: "", hour: "21:00", gap: 90, every: 7, plan: null};
+function openFixtureGen() {
+  if (!isUltra()) { toast("Esto lo hace ultra staff."); return; }
+  const F = S.fx, from = (D.fechas || 0) + 1;
+  if (!F.plan || F.plan.keys !== TEAM_KEYS.join() || F.plan.rounds !== F.rounds) { F.plan = planSeason(TEAM_KEYS, F.rounds); F.plan.keys = TEAM_KEYS.join(); F.plan.rounds = F.rounds; }
+  const P = F.plan, dates = planDates(P, F), per = P[0] ? P[0].ms.length : 0, total = P.reduce((s, fd) => s + fd.ms.length, 0) * (F.legs ? 2 : 1);
+  const vs = (a, b) => `<span class="fx-m">${img(a)}<b>${esc(TM(a).name)}</b><i>vs</i><b>${esc(TM(b).name)}</b>${img(b)}</span>`;
+  modal(`<div class="box cut fx-box"><div class="bh"><div><div class="eyebrow">Ultra staff · Partidos</div><h3>Generar la temporada</h3><div class="muted" style="font-size:14px">Todos contra todos, sorteado y parejo para los ${TEAM_KEYS.length} equipos.</div></div><button class="x" data-close aria-label="Cerrar">×</button></div>
+    <div class="bb">
+      <div class="fgrid">
+        ${fld("Cuántas veces se enfrentan", `<select id="fxR">${[1, 2, 3, 4].map(n => opt(n, n === 1 ? "1 vez" : `${n} veces`, n === F.rounds)).join("")}</select>`)}
+        ${fld("Cada cruce", `<select id="fxL">${opt("0", "Partido único", !F.legs)}${opt("1", "Ida y vuelta en la misma fecha", F.legs)}</select>`)}
+        ${fld("Día de la primera fecha", `<input id="fxS" type="date" value="${esc(F.start)}">`)}
+        ${fld("Hora del primer partido", `<input id="fxH" type="time" value="${esc(F.hour)}">`)}
+        ${fld("Minutos entre partidos", `<input id="fxG" type="number" min="15" max="600" step="15" value="${F.gap}">`)}
+        ${fld("Días entre fechas", `<input id="fxE" type="number" min="1" max="60" value="${F.every}">`)}</div>
+      <p class="adm-note">Se crean <b>${P.length} fechas</b> (de la ${from} a la ${from + P.length - 1}) con <b>${total} partidos</b>: ${per} cruce${per === 1 ? "" : "s"} por fecha${TEAM_KEYS.length % 2 ? ", y cada equipo descansa una fecha por vuelta" : ""}. En cada vuelta se invierte quién es local y un mismo cruce nunca se repite en fechas seguidas.${F.start ? "" : " Sin día, los partidos quedan “a confirmar” y se completan después."}${D.fechas ? ` Ya hay ${D.fechas} fecha${D.fechas === 1 ? "" : "s"} cargada${D.fechas === 1 ? "" : "s"}: las nuevas van a continuación.` : ""}</p>
+      <div class="fx-prev">${P.map((fd, i) => `<div class="fx-f"><header><b>Fecha ${from + i}</b><small>${F.rounds > 1 ? `Vuelta ${fd.round}` : ""}${dates[i][0] && dates[i][0][0] ? " · " + fmtDate(dates[i][0][0], false) : ""}</small></header>${fd.ms.map(([a, b]) => vs(a, b)).join("")}${fd.bye ? `<span class="fx-bye">Libre: ${esc(TM(fd.bye).name)}</span>` : ""}</div>`).join("")}</div>
+      <div class="rowbtns"><button class="btn gold" id="fxGo" type="button">Crear ${P.length} fechas</button><button class="btn" id="fxAgain" type="button">${ico("i-swap")}<span>Sortear de nuevo</span></button><button class="btn ghost" type="button" data-close>Cancelar</button></div></div></div>`);
+  const read = () => { F.rounds = +$("#fxR").value || 2; F.legs = $("#fxL").value === "1"; F.start = $("#fxS").value; F.hour = $("#fxH").value || "21:00"; F.gap = Math.max(15, +$("#fxG").value || 90); F.every = Math.max(1, +$("#fxE").value || 7); };
+  $(".fx-box").addEventListener("change", e => { if (e.target.matches("select, input")) { read(); openFixtureGen(); } });
+  $("#fxAgain").addEventListener("click", () => { read(); F.plan = null; openFixtureGen(); });
+  $("#fxGo").addEventListener("click", async () => { read(); const b = $("#fxGo"); b.disabled = true; b.textContent = "Creando…"; await createSeason(); });
+}
+async function createSeason() {
+  const F = S.fx, P = F.plan, from = (D.fechas || 0) + 1, dates = planDates(P, F), base = {status: "pending", ra: null, rb: null, ot: false, noShow: null, map: null, proj: null, mvp: null, stats: {}};
+  const taken = new Set(Object.keys(S.remote.matches || {})), idFor = (f, i, v) => { const id = `f${f}m${i}${v ? "v" : ""}`; return taken.has(id) ? newId("m") : id; };
+  let n = 0;
+  try {
+    for (const [j, fd] of P.entries()) {
+      const f = from + j;
+      for (const [i, [A, B]] of fd.ms.entries()) {
+        const id = idFor(f, i, false); taken.add(id);
+        await save(`matches/${id}`, {...base, fecha: f, a: A, b: B, date: dates[j][i][0] || "", leg: F.legs ? "ida" : null}); n++;
+        if (F.legs) { const id2 = taken.has(id + "v") ? newId("m") : id + "v"; taken.add(id2); await save(`matches/${id2}`, {...base, fecha: f, a: B, b: A, date: dates[j][i][1] || "", leg: "vuelta"}); n++; }
+      }
+    }
+  } catch (er) { toast(`Se cortó después de ${n} partidos: ${er.message || "error al guardar"}. Revisá y borrá lo que sobre.`); renderAdminSoon(); return; }
+  closeModal(); F.plan = null;
+  audit(`Generó la temporada: ${P.length} fechas (de la ${from} a la ${from + P.length - 1}), ${n} partidos, todos contra todos ${F.rounds} ${F.rounds === 1 ? "vez" : "veces"}${F.legs ? " con ida y vuelta" : ""}`);
+  toast(`Listo: ${P.length} fechas y ${n} partidos creados.`); renderAdminSoon();
+}
+// Borrar una fecha o todas: también se borran las elecciones de mapa de esas fechas y se saca la marca de coins acreditados
+async function deleteFechas(fs) {
+  if (!isUltra()) { toast("Esto lo hace ultra staff."); return; }
+  const all = !fs, R = RM(), ms = Object.entries(S.remote.matches || {}).filter(([, m]) => all || fs.includes(+m.fecha || 1));
+  if (!ms.length) { toast("No hay partidos para borrar."); return; }
+  const played = ms.filter(([, m]) => m.status === "played").length, label = all ? "todas las fechas" : `la fecha ${fs[0]}`;
+  const ok = await dangerGate(all ? "Borrar todas las fechas" : `Borrar la fecha ${fs[0]}`,
+    `<p>Se borran <b>${ms.length} partido${ms.length === 1 ? "" : "s"}</b> de ${label}${played ? `, <b>${played} ya jugado${played === 1 ? "" : "s"}</b> con sus resultados y estadísticas (la tabla y los rankings se recalculan)` : ""}. También se borran las elecciones de mapa de esas fechas.</p>${played ? '<p class="adm-note">Las coins que ya se acreditaron no se descuentan.</p>' : ""}`);
+  if (!ok) return;
+  const fset = new Set(ms.map(([, m]) => +m.fecha || 1)), ids = new Set(ms.map(([id]) => id));
+  let n = 0;
+  try {
+    for (const [id] of ms) { await save(`matches/${id}`, null, "del"); n++; }
+    for (const id of Object.keys(S.remote.mappicks || {})) { const f = +((/^f(\d+)_/.exec(id) || [])[1]); if (fset.has(f)) await save(`mappicks/${id}`, null, "del"); }
+    for (const id of Object.keys(S.remote.mapclaims || {})) if (ids.has(id)) await save(`mapclaims/${id}`, null, "del");
+    const d = cfgDoc(), cr = (d.credited || []).filter(f => !fset.has(+f)); if (cr.length !== (d.credited || []).length) { d.credited = cr; await save("league/config", d); }
+  } catch (er) { toast(`Se borraron ${n} de ${ms.length}: ${er.message || "error"}.`); renderAdminSoon(); return; }
+  audit(`Borró ${label} (${n} partidos${played ? `, ${played} jugados` : ""})`); S.adm.openMatch = null;
+  toast(all ? `Fixture borrado: ${n} partidos.` : `Fecha ${fs[0]} borrada: ${n} partidos.`); renderAdminSoon();
+}
+
+
+/* ================= Riot ID y Tracker (tracker.gg) ================= */
+// Cada jugador puede tener su Riot ID (Nombre#TAG). Con eso, su ficha, el análisis y Seguimiento muestran un botón a su perfil de tracker.gg.
+const normRiot = s => String(s || "").trim().replace(/\s*#\s*/, "#").replace(/\s{2,}/g, " ");
+const riotOk = s => /^[^#]{3,16}#[A-Za-z0-9]{2,5}$/.test(normRiot(s));
+const ignOf = pid => { const p = (M && M.players && M.players[pid]) || null; return p && riotOk(p.ign) ? normRiot(p.ign) : ""; };
+const trackerUrl = ign => `https://tracker.gg/valorant/profile/riot/${encodeURIComponent(normRiot(ign))}/overview`;
+const trackerBtn = (pid, cls = "btn sm ghost") => { const g = ignOf(pid);
+  return g ? `<a class="${cls} trk" href="${trackerUrl(g)}" target="_blank" rel="noopener noreferrer" title="Ver ${esc(g)} en tracker.gg">${ico("i-chart")}<span>Tracker</span></a>` : ""; };
+function riotIdCard(pid) {
+  const g = ignOf(pid), raw = ((M.players[pid] || {}).ign) || "";
+  return `<div class="panel pad cut riot-card"><div class="h3">${ico("i-chart")} Tu Riot ID y Tracker</div>
+    <p class="muted">${g ? `Tu perfil de tracker.gg queda en tu ficha para que todos puedan ver tus stats de rankeds.` : "Cargá tu Riot ID (como aparece en Valorant: Nombre#TAG) y tu ficha va a tener el botón a tu perfil de tracker.gg."}</p>
+    <div class="riot-row"><input class="cell-in" id="riotIn" value="${esc(raw)}" placeholder="Ej: Jagger#LAS" maxlength="22" autocomplete="off" spellcheck="false"><button class="btn sm gold" type="button" id="riotGo">Guardar</button>${g ? `<a class="btn sm ghost" href="${trackerUrl(g)}" target="_blank" rel="noopener noreferrer">${ico("i-chart")}<span>Ver mi Tracker</span></a>` : ""}</div>
+    <small class="muted">Para que tracker.gg muestre tus stats, tu perfil tiene que ser público ahí (entrás con tu cuenta de Riot en tracker.gg y lo activás).</small></div>`;
+}
+$("#profRoot") && $("#profRoot").addEventListener("click", async e => {
+  if (!e.target.closest("#riotGo")) return;
+  const v = normRiot($("#riotIn").value);
+  if (v && !riotOk(v)) { toast("Escribilo como en Valorant: Nombre#TAG (por ejemplo Jagger#LAS)."); return; }
+  const b = $("#riotGo"); b.disabled = true;
+  try { await api("/api/member", {action: "ign", ign: v}); toast(v ? `Riot ID guardado: ${v}.` : "Riot ID borrado."); } catch (er) { toast(er.message); }
+  b.disabled = false;
+});
 
 /* ================= arranque ================= */
 buildOrbit();
