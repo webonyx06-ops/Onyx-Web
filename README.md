@@ -1,5 +1,14 @@
 # ONYX · Liga comunitaria de Valorant
 
+## Activar postulaciones, revisión de equipos y desempates
+
+1. Publicá el contenido del ZIP en la raíz del repositorio de Netlify. Conservá las variables del sitio. Esta actualización usa las reglas de Firestore existentes y guarda las encuestas mediante el servidor.
+2. En **Panel → ONYX Bot**, registrá los comandos y guardá la correspondencia entre cada equipo y su rol de Discord. Para revisar la lista de miembros, activá **Server Members Intent** en el apartado Bot de la aplicación de Discord.
+3. Como administrador, ejecutá **/encuesta** en el canal elegido. Para crear o reutilizar **#postulaciones-onyx**, usá la opción **crear_canal**. El bot necesita permiso para escribir allí y para gestionar canales si tiene que crearlo.
+4. Cada jugador envía **/postular**. El usuario de Discord proviene de su cuenta. Repetir el comando actualiza su ficha y conserva el pago verificado por el staff. Las fichas se consultan desde **Equipos → Ver jugadores postulados**.
+5. En **Panel → Jugadores → Encuestas y pagos**, revisá las respuestas privadas y marcá el pago de US$ 2. En **Revisar planteles con Discord**, abrí la ficha del jugador si su rol indica otro equipo. Cuando haya varios roles o falte un vínculo, revisá la identidad antes de modificar el plantel.
+6. En **Panel de capitán → Resultados**, subí, pegá o arrastrá el marcador final. Revisá jugadores y números pendientes. Una serie con la ida y la vuelta cargadas y un triunfo por equipo habilita **Jugamos desempate**. Cada capitán carga la captura de la tercera partida por separado. Las reglas normales de aprobación y puntos se aplican a ese partido.
+
 Web de la liga: tabla de posiciones con desempates, simulador, playoffs con cuadro, rankings, premios, historia de temporadas, mercado de fichajes con ONYX Coins, resultados por captura (con lectura automática), pronósticos de la comunidad, votación real de capitán, fair play, panel de staff con auditoría y copias de seguridad, y sorteo de mapas en vivo para streamear.
 
 - **Hosting:** Netlify (gratis).

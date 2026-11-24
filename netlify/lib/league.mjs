@@ -48,13 +48,13 @@ function agg(log, f) {
 // Desempate con los mismos puntos (igual que la página): lo principal son las rondas ganadas.
 export const TIEBREAK = [["rf", 1, "Rondas ganadas"], ["rc", -1, "Rondas perdidas"], ["kills", 1, "Kills"], ["ast", 1, "Asistencias"], ["h2h", 1, "Directo"], ["kd", 1, "K/D"]];
 // Ida y vuelta: los dos partidos de una fecha entre los mismos equipos. Usa el campo leg si está cargado; si no, el día y hora.
-export const LEG_L = { ida: "Ida", vuelta: "Vuelta" };
-export const legRank = (m) => (m.leg === "ida" ? 0 : m.leg === "vuelta" ? 2 : 1);
+export const LEG_L = { ida: "Ida", vuelta: "Vuelta", desempate: "Desempate" };
+export const legRank = (m) => (m.leg === "desempate" ? 3 : m.leg === "ida" ? 0 : m.leg === "vuelta" ? 2 : 1);
 export const legSort = (x, y) => legRank(x) - legRank(y) || String(x.date || "").localeCompare(String(y.date || "")) || String(x.id).localeCompare(String(y.id));
 export function tagLegs(ms) {
   const g = {};
   ms.forEach((m) => { const key = `${m.fecha}|${[m.a, m.b].sort().join("~")}`; (g[key] = g[key] || []).push(m); });
-  Object.values(g).forEach((arr) => { arr.sort(legSort); arr.forEach((m, i) => { m.legN = i + 1; m.legs = arr.length; m.leg = arr.length === 2 ? (i ? "vuelta" : "ida") : ""; }); });
+  Object.values(g).forEach((arr) => { arr.sort(legSort); arr.forEach((m, i) => { m.legN = i + 1; m.legs = arr.length; m.leg = arr.some(g => g.leg === "desempate") ? (i === 2 ? "desempate" : i === 1 ? "vuelta" : "ida") : arr.length === 2 ? (i ? "vuelta" : "ida") : ""; }); });
   return ms;
 }
 export const legName = (m) => (m.leg ? LEG_L[m.leg] : m.legs > 1 ? `Partida ${m.legN}` : "");

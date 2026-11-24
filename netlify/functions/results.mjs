@@ -2,9 +2,10 @@
 //   { action: "read", mid, image }   → lee la captura con IA y propone marcador, mapa y estadísticas (capitanes del partido y staff)
 //   { action: "submit", mid, ra, rb, map, stats, img?, note? } → el capitán manda su resultado; si coincide con el del rival, se carga solo
 //   { action: "check", mid }         → staff: vuelve a comparar los dos envíos
+import { createTiebreak } from "../lib/tiebreak.mjs";
 import { initAdmin } from "../lib/admin.mjs";
 import { json, whoIs, readBody } from "../lib/auth.mjs";
-import { readScoreboard, mapToMatch, aiConfigured, AiError } from "../lib/scoreboard.mjs";
+import { readScoreboard, mapToMatch, aiConfigured, AiError, parseDataUrl } from "../lib/scoreboard.mjs";
 import { cleanSubmission, tryAuto, resCfg } from "../lib/results.mjs";
 import { patchSnapshot } from "../lib/publish.mjs";
 import { afterPatch } from "../lib/pickem.mjs";
@@ -36,6 +37,12 @@ export default async (req) => {
     if (!who.staff && team !== m.a && team !== m.b) return json(403, { error: "Ese partido no es de tu equipo." });
     const cfgS = await db.doc("league/config").get(), cfg = cfgS.exists ? cfgS.data() : {}, R = resCfg(cfg);
 
+    if (b.action === "tiebreak") {
+      const id = await createTiebreak(db,ms.ref,who);
+      clearSnapshotCache();
+      await patchSnapshot(db,["matches/"+id]);
+      return json(200,{id});
+    }
     if (b.action === "read") {
       if (!aiConfigured()) return json(501, { error: who.staff ? "La lectura automática todavía no está activada: falta cargar GEMINI_API_KEY (gratis, de Google AI Studio) en Netlify y volver a publicar." : "La lectura automática todavía no está activada.", noAi: true });
       if (!R.ai) return json(403, { error: "La lectura automática está apagada (Panel → General)." });
@@ -54,14 +61,21 @@ export default async (req) => {
       if (m.status === "played") return json(409, { error: "Ese partido ya está cargado. Si hay un error, avisale al staff." });
       const P = await players(db), clean = cleanSubmission(b, m, P);
       let hasImg = false;
-      if (typeof b.img === "string" && b.img.startsWith("data:image/")) {
+      if (b.img != null) {
+        if (typeof b.img !== "string") return json(400,{error:"Captura inválida."});
         if (b.img.length > 950000) return json(413, { error: "La captura es demasiado pesada." });
-        await db.doc(`resultimg/${mid}_${team}`).set({ data: b.img, at: now, by: who.u });
+        parseDataUrl(b.img);
         hasImg = true;
       }
-      const prev = await db.doc(`results/${mid}_${team}`).get();
-      if (prev.exists && ["auto", "ok"].includes(prev.data().status)) return json(409, { error: "Tu resultado ya fue aprobado." });
-      await db.doc(`results/${mid}_${team}`).set({ mid, team, fecha: +m.fecha || 1, ...clean, by: who.uid, u: who.u, at: now, status: "pend", hasImg: hasImg || !!(prev.exists && prev.data().hasImg), check: "" });
+      await db.runTransaction(async tx => {
+      const ref = db.doc(`results/${mid}_${team}`);
+      const [prev,live] = await Promise.all([tx.get(ref),tx.get(ms.ref)]);
+      const match = live.data();
+      if (!match || match.status === "played" || match.a !== m.a || match.b !== m.b) throw Object.assign(new Error("El partido cambió. Volvé a abrirlo."),{status:409});
+      if (prev.exists && ["auto", "ok"].includes(prev.data().status)) throw Object.assign(new Error("Tu resultado ya fue aprobado."),{status:409});
+      if (hasImg) tx.set(db.doc(`resultimg/${mid}_${team}`),{data:b.img,at:now,by:who.u});
+      tx.set(ref,{ mid, team, fecha: +m.fecha || 1, ...clean, by: who.uid, u: who.u, at: now, status: "pend", hasImg: hasImg || !!(prev.exists && prev.data().hasImg), check: "" });
+      });
       const label = (k) => String(k).toUpperCase();
       const r = await tryAuto(db, mid, { cfg, now, audit: (mm, x) => ({ at: now, uid: "servidor", u: "servidor", role: "auto", txt: `Resultado cargado solo (los dos capitanes coincidieron): F${mm.fecha} ${label(mm.a)} ${x.ra}-${x.rb} ${label(mm.b)}${x.map ? " · " + x.map : ""}` }) });
       if (r.applied) { clearSnapshotCache(); const p = await patchSnapshot(db, [`matches/${mid}`]); await afterPatch(db, p).catch(() => {}); }

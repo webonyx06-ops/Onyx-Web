@@ -26,7 +26,7 @@ await call("U1", { action: "save", config: { enabled: true, teams: { onyx: { cha
 sent.length = 0; r = await call("U1", { action: "notify", matchId: "m3", kinds: ["chat", "info"] }); ok(r.j.sent === 4, "avisar ahora manda a los dos equipos");
 sent.length = 0; r = await call("U1", { action: "role", user: "444444", role: "900002", op: "add", roleName: "NEXUS", userName: "Lucho" });
 ok(r.s === 200 && sent.some(s => s.method === "PUT" && s.path === "/guilds/123456789/members/444444/roles/900002"), "dar rol desde el panel");
-r = await call("U1", { action: "register" }); ok(r.j.count === 12, "registra 12 comandos");
+r = await call("U1", { action: "register" }); ok(r.j.count === 14, "registra 14 comandos, incluidos encuesta y postular");
 console.log(fails ? `\n${fails} FALLAS` : "\nTODO OK (panel del bot)");
 r = await call("U1", { action: "status" }); console.log(JSON.stringify(r.j).slice(0, 600));
 sent.length = 0; r = await call("U1", { action: "announce", to: "teams:info", mention: "team", title: "Fecha 3", text: "Confirmen horario" }); console.log(JSON.stringify(r.j), JSON.stringify(sent.map(s => [s.path, s.body && s.body.content])));

@@ -1948,6 +1948,23 @@ footer#footer{flex-direction:column;gap:12px}
 .sec-acts{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
 .px-tools select{height:36px;padding:0 34px 0 12px;border-radius:var(--r-sm);border:1px solid var(--line-2);background:var(--surface-2) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23a19cb4' stroke-width='2.4'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") no-repeat right 12px center;color:var(--fg);font:600 13px var(--f-body);appearance:none;-webkit-appearance:none;max-width:100%}
 .px-tools select option{background:var(--surface)}
+.rec-box{width:min(760px,96vw);max-height:88dvh;overflow:auto}
+.rec-card{padding:18px;margin:12px 0;border:1px solid var(--line-2);border-radius:14px;background:var(--surface);overflow-wrap:anywhere}
+.rec-card header,.recruit-intro{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.recruit-intro{margin-bottom:18px}
+.rec-card h4{font-size:1.25rem;margin:3px 0}
+.rec-card header>b{color:#dccfff;background:#392750;padding:4px 10px;border-radius:20px}
+.rec-card dl{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(180px,100%),1fr));gap:12px;margin:14px 0}
+.rec-card dt{font-size:.76rem;color:#bdb3cb}.rec-card dd{margin:3px 0;font-weight:550;white-space:pre-line}
+.rs-box .rs-drop{border-radius:14px;border:2px dashed #796399;background:linear-gradient(135deg,#231a30,#14121b);padding:16px}
+.rs-box .rs-drop.over,.rs-box .rs-drop:focus-visible{outline:2px solid #ba97ff;outline-offset:2px}
+.rs-box .rs-drop[aria-busy="true"]::after{content:"Preparando captura…";color:white;background:#241a32;padding:6px 12px;border-radius:8px}
+.rs-box .rs-drop img{object-fit:contain;max-height:260px}
+.rs-box .rs-tools{gap:8px;flex-wrap:wrap}
+.px-summary{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:0 0 16px}
+.px-summary p{color:var(--muted);font-size:.875rem;margin:0}
+.px-summary button[hidden]{display:none}
+#pxIcs:disabled{opacity:.55;cursor:not-allowed}
 .px-f{margin-bottom:26px}
 .px-f > header{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:12px}
 .px-f > header h3{font-family:var(--f-wide);font-stretch:118%;font-weight:750;font-size:20px}

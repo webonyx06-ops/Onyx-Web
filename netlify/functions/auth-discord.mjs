@@ -46,7 +46,7 @@ export default async (req) => {
     // vínculo automático: si el staff cargó el usuario de Discord en el jugador
     if (!doc.pid) {
       const ps = await db.collection("players").where("discord", "in", [username, username.toLowerCase(), String(u.id)].filter(Boolean)).get().catch(() => ({ docs: [] }));
-      const p = ps.docs[0];
+      const p = ps.docs.length === 1 ? ps.docs[0] : null;
       if (p) {
         const taken = await db.collection("members").where("pid", "==", p.id).limit(1).get();
         if (taken.empty) { doc.pid = p.id; doc.linkedAt = now; doc.linkedBy = "auto"; }

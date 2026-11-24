@@ -373,6 +373,7 @@
       <div><div class="crumb"><svg class="ic"><use href="#i-coins"/></svg><span>Capitanes</span></div><h2>ONYX Coins</h2>
         <p>Cada equipo tiene un presupuesto en ONYX Coins. Solo los capitanes pueden fichar: ofertan con su cuenta y el staff aprueba cada pase. Los jugadores con cláusula de rescisión se van si alguien la paga.</p></div>
     </div>
+    <div class="panel pad cut recruit-intro"><h3>Jugadores en búsqueda de equipo</h3><button class="btn" type="button" data-recruit="public">Ver postulaciones</button></div>
     <div class="mk-lock cut" id="mkLock">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
       <div><b>El mercado es solo para capitanes</b><span>Los capitanes ven los jugadores, sus valores y cláusulas, y ofertan desde acá. Si sos capitán, entrá con tu cuenta.</span></div>
@@ -417,7 +418,8 @@
       <div><div class="crumb"><svg class="ic"><use href="#i-shield"/></svg><span>Jugadores</span></div><h2>Equipos y roles</h2>
         <p>Cada equipo tiene capitán, subcapitán y roles definidos. Elegí un equipo para ver su plantel.</p></div>
     </div>
-    <div class="teams" id="teams"></div>
+    <div class="rowbtns recruit-intro"><button class="btn sm" data-recruit="public" type="button">Ver jugadores postulados</button></div>
+      <div class="teams" id="teams"></div>
     <div class="grid-2" style="margin-top:18px">
       <div class="panel pad cut" id="teamDetail"></div>
       <div class="panel pad cut">
@@ -545,9 +547,11 @@
       <div><div class="crumb"><svg class="ic"><use href="#i-calendar"/></svg><span>Liga</span></div><h2>Partidos</h2>
         <p>Todo el fixture con resultados. Tocá un partido para ver el marcador, las estadísticas de cada jugador y compartirlo.</p></div>
       <div class="sec-acts px-tools"><select id="pxTeam" aria-label="Filtrar por equipo"></select>
-        <div class="seg" id="pxShow"><button class="on" data-show="all">Todos</button><button data-show="played">Jugados</button><button data-show="pending">Por jugar</button></div>
+        <select id="pxFecha" aria-label="Filtrar por fecha"></select>
+        <div class="seg" id="pxShow" role="group" aria-label="Estado de los partidos"><button type="button" class="on" data-show="all" aria-pressed="true">Todos</button><button type="button" data-show="played" aria-pressed="false">Jugados</button><button type="button" data-show="pending" aria-pressed="false">Por jugar</button></div>
         <button class="btn sm ghost" type="button" id="pxIcs"><svg class="ic"><use href="#i-calendar"/></svg><span>Al calendario</span></button></div>
     </div>
+    <div class="px-summary"><p id="pxCount" role="status"></p><button class="btn sm ghost" type="button" id="pxReset" hidden>Limpiar filtros</button></div>
     <div id="pxRoot"></div>
   </section>
 

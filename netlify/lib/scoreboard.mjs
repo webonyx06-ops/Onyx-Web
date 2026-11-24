@@ -12,7 +12,7 @@ Return ONLY one JSON object, with no extra text, using exactly this shape:
 {"map": string|null, "teams": [{"score": integer|null, "players": [{"name": string, "agent": string|null, "acs": integer|null, "k": integer|null, "d": integer|null, "a": integer|null}]}, {"score": integer|null, "players": [...]}], "ot": boolean|null, "confidence": "high"|"medium"|"low", "notes": string}
 Rules:
 - Put the two teams in "teams". Players of the same team share the same row color or side (for example teal/green vs red). Each team has up to 5 players.
-- "name": the in-game name exactly as written, without the "#tag".
+- "name": the in-game name exactly as written, including its #tag when visible. If a streamer alias, an agent name or an unreadable name hides the Riot ID, do not invent a player identity.
 - "k", "d", "a": the K / D / A columns. "acs": Average Combat Score (ACS column).
 - "score": rounds won by that team, from the header (for example "13 - 9"). If the header shows only one number for "your" team, still fill both when visible.
 - "ot": true when the total of rounds is more than 24 (overtime), false otherwise, null if the score is not visible.
@@ -44,13 +44,13 @@ export function extractJson(txt) {
   return null;
 }
 
-const int = (v, max) => { const n = Math.round(+v); return Number.isFinite(n) && n >= 0 && n <= max ? n : null; };
+const int = (v, max) => { if (v == null || v === "") return null; const n = Number(v); return Number.isInteger(n) && n >= 0 && n <= max ? n : null; };
 export function cleanRead(j) {
   if (!j || typeof j !== "object") throw new AiError("No pude leer la captura. Probá con otra más nítida.");
   if (j.error) throw new AiError(j.error === "not_scoreboard" ? "La imagen no parece un marcador de VALORANT." : "No pude leer la captura.", 422);
   const teams = (Array.isArray(j.teams) ? j.teams : []).slice(0, 2).map((t) => ({
     score: int((t || {}).score, 40),
-    players: (Array.isArray((t || {}).players) ? t.players : []).slice(0, 6).map((p) => ({ name: String((p || {}).name || "").replace(/#.*$/, "").trim().slice(0, 32), agent: (p && p.agent) ? String(p.agent).slice(0, 20) : null, acs: int(p && p.acs, 999), k: int(p && p.k, 99), d: int(p && p.d, 99), a: int(p && p.a, 99) })).filter((p) => p.name),
+    players: (Array.isArray((t || {}).players) ? t.players : []).slice(0, 6).map((p) => ({ riotId: String(p?.name || "").includes("#") ? String(p.name).trim().slice(0,48) : "", name: String((p || {}).name || "").replace(/#.*$/, "").trim().slice(0, 32), agent: (p && p.agent) ? String(p.agent).slice(0, 20) : null, acs: int(p && p.acs, 999), k: int(p && p.k, 99), d: int(p && p.d, 99), a: int(p && p.a, 99) })).filter((p) => p.name),
   }));
   while (teams.length < 2) teams.push({ score: null, players: [] });
   return { map: j.map ? String(j.map).slice(0, 30) : null, teams, ot: typeof j.ot === "boolean" ? j.ot : null, confidence: ["high", "medium", "low"].includes(j.confidence) ? j.confidence : "medium", notes: String(j.notes || "").slice(0, 300) };
@@ -145,12 +145,23 @@ export function nameSim(x, y) {
   return Math.max(0, 1 - lev(a, b) / Math.max(a.length, b.length));
 }
 // players: [{ id, name, ign, team }]. Devuelve, para cada fila, el jugador más parecido (cada jugador una sola vez).
-export function matchRows(rows, players, min = 0.55) {
+export function matchRows(rows, players, min = 0.72) {
   const pairs = [];
-  rows.forEach((r, i) => players.forEach((p) => { const s = Math.max(nameSim(r.name, p.name), p.ign ? nameSim(r.name, p.ign) : 0); if (s >= min) pairs.push({ i, pid: p.id, s }); }));
+  const full = name => String(name || "").trim().normalize("NFKC").toLowerCase();
+  rows.forEach((r,i) => {
+    const candidates = players.map(p => {
+      const readId = full(r.riotId || r.name);
+      if (readId.includes("#") && full(p.ign).includes("#") && readId !== full(p.ign)) return {i,pid:p.id,s:0};
+      const tagged = readId.includes("#") && readId === full(p.ign);
+      const s = tagged ? 1.2 : Math.max(nameSim(r.name,p.name),nameSim(r.name,p.ign));
+      return {i,pid:p.id,s};
+    }).sort((a,b)=>b.s-a.s);
+    const [first,second] = candidates;
+    if (first && first.s >= min && (!second || first.s-second.s >= .08)) pairs.push(first);
+  });
   pairs.sort((x, y) => y.s - x.s);
   const usedR = new Set(), usedP = new Set(), out = rows.map(() => ({ pid: null, score: 0 }));
-  for (const x of pairs) { if (usedR.has(x.i) || usedP.has(x.pid)) continue; usedR.add(x.i); usedP.add(x.pid); out[x.i] = { pid: x.pid, score: Math.round(x.s * 100) / 100 }; }
+  for (const x of pairs) { if (usedR.has(x.i) || usedP.has(x.pid)) continue; usedR.add(x.i); usedP.add(x.pid); out[x.i] = { pid: x.pid, score: Math.min(1,Math.round(x.s * 100) / 100) }; }
   return out;
 }
 
@@ -167,7 +178,16 @@ export function mapToMatch(read, m, players) {
   const firstIsA = vote(groups[0], m.a) + vote(groups[1], m.b) >= vote(groups[0], m.b) + vote(groups[1], m.a);
   const [ga, gb] = firstIsA ? [groups[0], groups[1]] : [groups[1], groups[0]];
   const [ta, tb] = firstIsA ? [read.teams[0], read.teams[1]] : [read.teams[1], read.teams[0]];
+  const sidesSure = Math.abs((vote(groups[0], m.a) + vote(groups[1], m.b)) - (vote(groups[0], m.b) + vote(groups[1], m.a))) >= 2;
+  if (sidesSure) {
+    const used = new Set(match.map(r=>r.pid).filter(Boolean));
+    for (const [group,team] of [[ga,m.a],[gb,m.b]]) {
+      const missing = group.filter(row=>!row.pid);
+      const extra = matchRows(missing,roster(team).filter(p=>!used.has(p.id)),.82);
+      missing.forEach((row,i)=>Object.assign(row,extra[i]));
+    }
+  }
   const rows = [...ga.map((r) => ({ ...r, side: "a" })), ...gb.map((r) => ({ ...r, side: "b" }))];
   const ra = ta.score, rb = tb.score;
-  return { map: read.map, ra, rb, ot: read.ot != null ? read.ot : (ra != null && rb != null ? ra + rb > 24 : null), rows, confidence: read.confidence, notes: read.notes, sidesSure: Math.abs((vote(groups[0], m.a) + vote(groups[1], m.b)) - (vote(groups[0], m.b) + vote(groups[1], m.a))) >= 2 };
+  return { map: read.map, ra, rb, ot: read.ot != null ? read.ot : (ra != null && rb != null ? ra + rb > 24 : null), rows, confidence: read.confidence, notes: read.notes, sidesSure };
 }

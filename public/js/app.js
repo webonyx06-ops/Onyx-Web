@@ -244,14 +244,14 @@ function rankValue(rank) {
   return 500;
 }
 // Ida y vuelta: en una fecha, los dos partidos entre los mismos equipos. Usa el campo leg si está cargado; si no, el orden (día y hora).
-const LEG_L = {ida: "Ida", vuelta: "Vuelta"};
-const legRank = m => m.leg === "ida" ? 0 : m.leg === "vuelta" ? 2 : 1;
+const LEG_L = {ida: "Ida", vuelta: "Vuelta", desempate: "Desempate"};
+const legRank = m => m.leg === "desempate" ? 3 : m.leg === "ida" ? 0 : m.leg === "vuelta" ? 2 : 1;
 function tagLegs(ms) {
   const g = {};
   ms.forEach(m => { const key = `${m.fecha}|${[m.a, m.b].sort().join("~")}`; (g[key] = g[key] || []).push(m); });
   Object.values(g).forEach(arr => {
     arr.sort((x, y) => legRank(x) - legRank(y) || String(x.date || "").localeCompare(String(y.date || "")) || x.id.localeCompare(y.id));
-    arr.forEach((m, i) => { m.legN = i + 1; m.legs = arr.length; m.leg = arr.length === 2 ? (i ? "vuelta" : "ida") : ""; });
+    arr.forEach((m, i) => { m.legN = i + 1; m.legs = arr.length; m.leg = arr.some(g => g.leg === "desempate") ? (i === 2 ? "desempate" : i === 1 ? "vuelta" : "ida") : arr.length === 2 ? (i ? "vuelta" : "ida") : ""; });
   });
 }
 const legName = m => m.leg ? LEG_L[m.leg] : m.legs > 1 ? `Partida ${m.legN}` : "Partido";
@@ -1995,7 +1995,7 @@ function renderAdmin() {
       <span class="who-chip ${isUltra() ? "ultra" : ""}">${ico("i-user")}${esc(S.staff.u)}<small>${isUltra() ? "Ultra staff" : "Staff"}</small></span>
       <button class="btn sm" data-act="stream">${ico("i-play")}<span>Modo streamer</span></button><button class="btn sm ghost" data-act="logout">${ico("i-logout")}<span>Cerrar sesión</span></button><button class="btn sm ghost icon-only" data-act="close" aria-label="Cerrar el panel" title="Cerrar (Esc)">${ico("i-close")}</button></div>
     <div class="adm-main"><nav class="adm-tabs" aria-label="Secciones del panel">${tabsHtml}</nav>
-    <div class="adm-body">${M.ex ? `<div class="ex-banner cut-s" style="margin:0"><span><b>OJO</b> &nbsp;La página pública muestra datos de ejemplo porque la liga está vacía. Todo lo que cargues acá es real y reemplaza el ejemplo.</span></div>` : ""}${!S.db ? `<div class="ex-banner cut-s" style="margin:0"><span><b>SIN BASE DE DATOS</b> &nbsp;Abrí la página publicada para guardar cambios.</span></div>` : ""}${tabHtml}</div></div></div></div>`;
+    <div class="adm-body">${S.adm.tab === "jugadores" ? `<div class="adm-card"><h3>Reclutamiento</h3><div class="rowbtns"><button class="btn sm" data-recruit="staff">Encuestas y pagos</button><button class="btn sm ghost" data-recruit="roles">Revisar planteles con Discord</button></div></div>` : ""}${M.ex ? `<div class="ex-banner cut-s" style="margin:0"><span><b>OJO</b> &nbsp;La página pública muestra datos de ejemplo porque la liga está vacía. Todo lo que cargues acá es real y reemplaza el ejemplo.</span></div>` : ""}${!S.db ? `<div class="ex-banner cut-s" style="margin:0"><span><b>SIN BASE DE DATOS</b> &nbsp;Abrí la página publicada para guardar cambios.</span></div>` : ""}${tabHtml}</div></div></div></div>`;
   setSaveState(); if (S.adm.tab === "staff") renderAuditList();
   const nb = $(".adm-body", root); if (nb) nb.scrollTop = scroll;
 }
@@ -2223,9 +2223,10 @@ function admEquipos(R) {
 // Achica el logo a 256×256 para guardarlo liviano (WEBP).
 function logoFromFile(file) { return imageFromFile(file, 256, true); }
 // Achica una imagen para guardarla en la base (WEBP). square = lienzo cuadrado (logos); si no, mantiene la proporción (fotos).
-async function imageFromFile(file, max = 640, square = false) {
+async function imageFromFile(file, max = 640, square = false, scoreboard = false) {
   if (!file || !/^image\//.test(file.type)) throw new Error("Elegí una imagen (PNG, JPG, WEBP o SVG).");
-  if (file.size > 8e6) throw new Error("La imagen pesa demasiado (máximo 8 MB).");
+  if (scoreboard && file.size > 24e6) throw new Error("La captura supera los 24 MB.");
+  if (!scoreboard && file.size > 8e6) throw new Error("La imagen pesa demasiado (máximo 8 MB).");
   const url = URL.createObjectURL(file);
   try {
     const im = await new Promise((ok, no) => { const i = new Image(); i.onload = () => ok(i); i.onerror = () => no(new Error("No se pudo leer la imagen.")); i.src = url; });
@@ -2233,6 +2234,17 @@ async function imageFromFile(file, max = 640, square = false) {
     const cv = document.createElement("canvas"); cv.width = square ? max : w; cv.height = square ? max : h; const cx = cv.getContext("2d");
     if (square) { const s2 = Math.min(max / w0, max / h0), w2 = w0 * s2, h2 = h0 * s2; cx.imageSmoothingQuality = "high"; cx.drawImage(im, (max - w2) / 2, (max - h2) / 2, w2, h2); }
     else { cx.imageSmoothingQuality = "high"; cx.drawImage(im, 0, 0, w, h); }
+    if (scoreboard) {
+      for (;;) {
+        for (const q of [.91,.81,.68]) {
+          const encoded = cv.toDataURL("image/jpeg",q);
+          if (encoded.startsWith("data:image/jpeg;") && encoded.length <= 900000) return encoded;
+        }
+        if (Math.max(cv.width,cv.height) < 900) throw new Error("No se pudo comprimir la captura.");
+        cv.width = Math.max(1, Math.round(cv.width*.8)); cv.height = Math.max(1, Math.round(cv.height*.8));
+        cx.drawImage(im,0,0,cv.width,cv.height);
+      }
+    }
     let data = cv.toDataURL("image/webp", square ? .9 : .82); if (!data.startsWith("data:image/webp")) data = cv.toDataURL(square ? "image/png" : "image/jpeg", .85);
     if (data.length > 600000) data = cv.toDataURL("image/webp", .7);
     if (data.length > 900000) throw new Error("La imagen quedó muy pesada. Probá con otra.");
@@ -3976,8 +3988,8 @@ function renderResult(first) {
   const ai = RS.ai ? `<div class="rs-ai ${RS.ai.confidence}">${ico("i-bolt")}<span>Leído con IA · confianza ${{high: "alta", medium: "media", low: "baja"}[RS.ai.confidence] || "media"}${RS.ai.notes ? " · " + esc(RS.ai.notes) : ""}. Revisá los números antes de ${RS.mode === "cap" ? "enviar" : "guardar"}.${RS.left != null ? ` Te quedan ${RS.left} lecturas hoy.` : ""}</span></div>` : "";
   const html = `<div class="box cut rs-box" style="--tc:${A.c}"><div class="bh">${img(m.a)}<div><div class="eyebrow">F${m.fecha}${m.leg ? " · " + LEG_L[m.leg] : ""} · ${RS.mode === "cap" ? "Cargar resultado" : "Carga rápida"}</div><h3>${esc(A.name)} vs ${esc(B.name)}</h3><div class="muted" style="font-size:13px">${fmtDate(m.date)}</div></div><button class="x" data-close aria-label="Cerrar">×</button></div>
     <div class="bb">
-      <div class="rs-shot ${RS.img ? "has" : ""}"><label class="rs-drop" tabindex="0">${RS.img ? `<img src="${RS.img}" alt="Captura del marcador">` : `${ico("i-play")}<b>Subí la captura del marcador</b><small>Tocá o arrastrá la imagen (la pantalla final con K / D / A y ACS)</small>`}<input type="file" id="rsFile" accept="image/*" hidden></label>
-        <div class="rs-tools">${cfgR.ai ? `<button class="btn sm gold" type="button" id="rsRead" ${RS.img && !RS.busy ? "" : "disabled"}>${ico("i-bolt")}<span>${RS.busy ? "Leyendo…" : "Leer la captura"}</span></button>` : ""}<button class="btn sm ghost" type="button" id="rsPasteT">${RS.paste ? "Ocultar texto" : "Pegar texto"}</button></div></div>
+      <div class="rs-shot ${RS.img ? "has" : ""}"><label class="rs-drop" tabindex="0">${RS.img ? `<img src="${RS.img}" alt="Captura del marcador">` : `${ico("i-image")}<b>Subí el marcador final</b><small>Arrastrá una captura, pegala con Ctrl + V o elegila desde tu dispositivo. Hasta 24 MB.</small>`}<input type="file" id="rsFile" accept="image/*" hidden></label>
+        <div class="rs-tools">${RS.img ? `<button type="button" class="btn sm ghost" id="rsReplace">Cambiar captura</button>` : ""}${cfgR.ai ? `<button class="btn sm gold" type="button" id="rsRead" ${RS.img && !RS.busy ? "" : "disabled"}>${ico("i-bolt")}<span>${RS.busy ? "Leyendo…" : "Leer la captura"}</span></button>` : ""}<button class="btn sm ghost" type="button" id="rsPasteT">${RS.paste ? "Ocultar texto" : "Pegar texto"}</button></div></div>
       ${RS.paste ? `<div class="ff"><label for="rsPaste">Una línea por jugador: <span class="mono">Nombre K/D/A ACS</span></label><textarea id="rsPaste" rows="5" placeholder="Jagger 22/14/6 268&#10;Nova 18/15/9 231"></textarea><div class="rowbtns"><button class="btn sm" type="button" id="rsPasteGo">Completar con el texto</button></div></div>` : ""}
       ${ai}
       <div class="rs-score"><label><span>${esc(A.name)}</span><input type="number" min="0" max="40" inputmode="numeric" id="rsRa" value="${RS.ra}"></label><b>–</b><label><span>${esc(B.name)}</span><input type="number" min="0" max="40" inputmode="numeric" id="rsRb" value="${RS.rb}"></label>
@@ -3985,7 +3997,7 @@ function renderResult(first) {
       <div class="rs-grid">${team("a", A)}${team("b", B)}</div>
       ${RS.mode === "cap" ? `<div class="ff"><label for="rsNote">Nota para el staff (opcional)</label><input id="rsNote" maxlength="300" value="${esc(RS.note)}" placeholder="Ej: entró un suplente por desconexión"></div>` : ""}
       <div class="err" id="rsErr" hidden></div>
-      <div class="rowbtns"><button class="btn gold" type="button" id="rsGo">${RS.mode === "cap" ? "Enviar resultado" : "Guardar en el partido"}</button><span class="adm-note">${RS.mode === "cap" ? (cfgR.auto ? "Si el otro capitán manda lo mismo, se carga solo. Si no, lo revisa el staff." : "Lo revisa el staff antes de que aparezca en la tabla.") : "Marca el partido como jugado con este marcador y estas estadísticas."}</span></div></div></div>`;
+      <div class="rowbtns"><button class="btn gold" type="button" id="rsGo" ${RS.busy ? "disabled" : ""}>${RS.mode === "cap" ? "Enviar resultado" : "Guardar en el partido"}</button><span class="adm-note">${RS.mode === "cap" ? (cfgR.auto ? "Si el otro capitán manda lo mismo, se carga solo. Si no, lo revisa el staff." : "Lo revisa el staff antes de que aparezca en la tabla.") : "Marca el partido como jugado con este marcador y estas estadísticas."}</span></div></div></div>`;
   if (first || !$("#modalRoot .rs-box")) { modal(html); wireResult(); }
   else { const sc = $("#modalRoot .rs-box").scrollTop; $("#modalRoot .modal").innerHTML = html; $("#modalRoot .rs-box").scrollTop = sc; wireResult(); }
 }
@@ -3997,7 +4009,21 @@ function rsSync() {
 function wireResult() {
   const box = $("#modalRoot .rs-box"); if (!box) return;
   const file = $("#rsFile");
-  const take = async f => { try { RS.img = await imageFromFile(f, 1568, false); RS.ai = null; rsSync(); renderResult(); } catch (er) { toast(er.message); } };
+  $("#rsReplace")?.addEventListener("click", () => file.click());
+  const take = async f => {
+    if (RS.busy) return;
+    const draft = RS, request = (draft.imageRequest || 0) + 1;
+    draft.imageRequest = request;
+    const imageBox = box.querySelector(".rs-drop");
+    imageBox.setAttribute("aria-busy","true");
+    $("#rsGo").disabled = true;
+    if ($("#rsRead")) $("#rsRead").disabled = true;
+    try {
+      const image = await imageFromFile(f, 2160, false, true);
+      if (draft !== RS || draft.imageRequest !== request || !box.isConnected) return;
+      rsSync(); RS.img = image; RS.ai = null; renderResult();
+    } catch (er) { if (box.isConnected && draft.imageRequest === request) { toast(er.message); rsSync(); renderResult(); } }
+  };
   file.addEventListener("change", () => { if (file.files[0]) take(file.files[0]); });
   const drop = $(".rs-drop", box);
   drop.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); file.click(); } });
@@ -4025,7 +4051,7 @@ function fillRows(read) {
   const pairs = [];
   read.forEach((x, i) => {
     if (x.pid && D.PM[x.pid]) pairs.push({i, pid: x.pid, s: 2 + (x.score || .9)});
-    else pool.forEach(p => { const s = Math.max(simName(x.name, p.name), p.ign ? simName(x.name, p.ign) : 0); if (s >= .5) pairs.push({i, pid: p.id, s: s + (base.includes(p) ? .04 : 0)}); });
+    else if (!Object.hasOwn(x,"pid")) base.forEach(p => { const s = Math.max(simName(x.name, p.name), p.ign ? simName(x.name, p.ign) : 0); if (s >= .78) pairs.push({i, pid: p.id, s: s + (base.includes(p) ? .04 : 0)}); });
   });
   pairs.sort((a, b) => b.s - a.s);
   const got = {}, used = new Set();
@@ -4038,15 +4064,17 @@ function fillRows(read) {
   toast(`Completé ${rows.length - miss} jugador${rows.length - miss === 1 ? "" : "es"}.${miss ? ` ${miss} no coincide${miss === 1 ? "" : "n"} con nadie: elegilo${miss === 1 ? "" : "s"} en la lista.` : ""}${doubt ? ` Revisá los marcados en amarillo.` : ""}`);
 }
 async function aiRead() {
-  if (!RS.img || RS.busy) return; RS.busy = true; renderResult();
+  if (!RS.img || RS.busy) return; const draft = RS; RS.busy = true; renderResult();
   try {
     const r = await api("/api/results", {action: "read", mid: RS.mid, image: RS.img});
+    if (RS !== draft || !$("#modalRoot .rs-box")) return;
     RS.ai = {confidence: r.confidence, notes: r.notes}; RS.left = r.left;
     if (r.ra != null) RS.ra = r.ra; if (r.rb != null) RS.rb = r.rb; if (r.map && M.cfg.maps.some(x => x.n === r.map)) RS.map = r.map;
     RS.busy = false;
     fillRows((r.rows || []).map(x => ({name: x.name, k: x.k, d: x.d, a: x.a, acs: x.acs, side: x.side, pid: x.pid, score: x.score})));
+    if (!r.rows?.length) renderResult();
     if (!r.sidesSure) toast("Revisá que cada equipo haya quedado de su lado.");
-  } catch (er) { RS.busy = false; renderResult(); toast(er.message); }
+  } catch (er) { if (draft !== RS || !$("#modalRoot .rs-box")) return; RS.busy = false; renderResult(); toast(er.message); }
 }
 function resErr(t) { const e = $("#rsErr"); if (e) { e.hidden = !t; e.textContent = t || ""; } }
 function resPayload() {
@@ -4096,13 +4124,25 @@ function capResultsCard(k) {
   const due = pend.filter(m => m.fecha === nf || (parseLocal(m.date) && parseLocal(m.date).getTime() < now));
   const recent = D.played.filter(m => (m.a === k || m.b === k) && resOf(m.id, k) && m.fecha >= (D.lastF || 0) - 1);
   const list = [...due, ...recent].sort((a, b) => a.fecha - b.fecha || (a.legN || 0) - (b.legN || 0));
-  if (!list.length) return "";
+  const ties = [];
+  const groups = new Map();
+  D.ms.filter(m => m.a === k || m.b === k).forEach(m => {
+    const key = JSON.stringify([m.fecha,[m.a,m.b].sort()]);
+    if (!groups.has(key)) groups.set(key,[]);
+    groups.get(key).push(m);
+  });
+  for (const games of groups.values()) {
+    if (games.length !== 2 || games.some(m => m.status !== "played" || +m.ra === +m.rb)) continue;
+    if (new Set(games.map(m=>+m.ra>+m.rb?m.a:m.b)).size === 2) ties.push(games[0]);
+  }
+  for (const m of pend.filter(m => m.leg === "desempate")) if (!list.includes(m)) list.push(m);
+  if (!list.length && !ties.length) return "";
   const row = m => { const r = resOf(m.id, k), rival = m.a === k ? m.b : m.a, started = parseLocal(m.date) && parseLocal(m.date).getTime() < now;
     const st = m.status === "played" ? (r && RES_ST[r.status] ? RES_ST[r.status] : ["Cargado por el staff", "ok"]) : r ? (r.status === "rej" ? RES_ST.rej : ["Enviado", "pend"]) : ["Sin enviar", started ? "warn" : "idle"];
     return `<div class="req res-req" style="--st:var(--${st[1] === "ok" ? "win" : st[1] === "no" ? "loss" : "gold"})">${img(rival)}<div><div class="rq-t"><b>F${m.fecha}${m.leg ? " " + LEG_L[m.leg] : ""}</b> vs ${esc(TM(rival).name)}${r ? ` · <span class="mono">${r.ra}-${r.rb}</span>` : ""}</div>
       <div class="rq-m">${fmtDate(m.date)}${r && r.check && r.status === "pend" ? ` · ${esc(r.check)}` : ""}${r && r.status === "rej" && r.reviewNote ? ` · “${esc(r.reviewNote)}”` : ""}</div></div>
       <div class="rq-acts"><span class="st ${st[1]}">${st[0]}</span>${m.status !== "played" ? `<button class="btn sm ${r ? "ghost" : "gold"}" data-cap-act="res:${m.id}">${r ? "Corregir" : "Cargar resultado"}</button>` : ""}</div></div>`; };
-  return `<div class="adm-card"><h3>${ico("i-check")} Resultados <small>subí la captura del marcador después de jugar</small></h3><div style="display:grid;gap:6px">${list.map(row).join("")}</div>
+  return `<div class="adm-card"><h3>${ico("i-check")} Resultados <small>subí la captura del marcador después de jugar</small></h3><div style="display:grid;gap:6px">${list.map(row).join("")}${ties.map(m=>`<button class="btn sm" data-tiebreak="${esc(m.id)}">Jugamos desempate · F${m.fecha} vs ${esc(TM(m.a===k?m.b:m.a).name)}</button>`).join("")}</div>
     <p class="adm-note">${resCfgC().auto ? "Cuando los dos capitanes mandan el mismo resultado, se carga solo en la tabla. Si no coinciden, lo revisa el staff con las dos capturas." : "El staff revisa cada resultado con la captura antes de cargarlo."}</p></div>`;
 }
 
@@ -4692,14 +4732,49 @@ function exportIcs(list, label) {
 }
 
 // ---------- sección Partidos ----------
-S.px = {team: "all", show: "all"};
+const DEFAULT_MATCH_FILTERS = {team: "all", fecha: "all", show: "all"};
+S.px = {...DEFAULT_MATCH_FILTERS};
+
+function filteredMatches(matches) {
+  const {team, fecha, show} = S.px;
+  return matches.filter(m =>
+    (team === "all" || m.a === team || m.b === team) &&
+    (fecha === "all" || String(m.fecha) === fecha) &&
+    (show === "all" || (show === "played") === (m.status === "played"))
+  );
+}
+
+function updateMatchSelect(selector, options, current) {
+  const select = $(selector);
+  if (!select) return;
+  const markup = options.map(([value, label]) => opt(value, label, false)).join("");
+  if (select.dataset.options !== markup) {
+    select.innerHTML = markup;
+    select.dataset.options = markup;
+  }
+  select.value = current;
+}
 function renderPartidos() {
   const root = $("#pxRoot"); if (!root) return;
   const ut = $("#pxUltra"); if (ut) ut.hidden = !isUltra();
-  const sel = $("#pxTeam");
-  if (sel) { const v = S.px.team; sel.innerHTML = opt("all", "Todos los equipos", v === "all") + TEAM_KEYS.map(k => opt(k, TM(k).name, v === k)).join(""); if (!TEAM_KEYS.includes(v)) S.px.team = "all"; }
-  $$("#pxShow button").forEach(b => b.classList.toggle("on", b.dataset.show === S.px.show));
-  const k = S.px.team, list = okMs().filter(m => (k === "all" || m.a === k || m.b === k) && (S.px.show === "all" || (S.px.show === "played") === (m.status === "played")));
+  const matches = okMs();
+  const fechas = [...new Set(matches.map(m => m.fecha))].sort((a, b) => a - b).map(String);
+  if (!TEAM_KEYS.includes(S.px.team)) S.px.team = "all";
+  if (!fechas.includes(S.px.fecha)) S.px.fecha = "all";
+  updateMatchSelect("#pxTeam", [["all", "Todos los equipos"], ...TEAM_KEYS.map(k => [k, TM(k).name])], S.px.team);
+  updateMatchSelect("#pxFecha", [["all", "Todas las fechas"], ...fechas.map(f => [f, "Fecha " + f])], S.px.fecha);
+  $$("#pxShow button").forEach(button => {
+    const active = button.dataset.show === S.px.show;
+    button.classList.toggle("on", active);
+    button.setAttribute("aria-pressed", active);
+  });
+  const list = filteredMatches(matches);
+  const count = list.length === matches.length
+    ? list.length + (list.length === 1 ? " partido" : " partidos")
+    : list.length + " de " + matches.length + " partidos";
+  if ($("#pxCount").textContent !== count) $("#pxCount").textContent = count;
+  $("#pxReset").hidden = Object.keys(DEFAULT_MATCH_FILTERS).every(key => S.px[key] === DEFAULT_MATCH_FILTERS[key]);
+  $("#pxIcs").disabled = !list.some(m => m.status !== "played" && parseLocal(m.date));
   const fs = [...new Set(list.map(m => m.fecha))].sort((a, b) => S.px.show === "played" ? b - a : a - b);
   const card = c => `<div class="px-cruce">${c.games.map(g => { const won = g.status === "played" ? (+g.ra > +g.rb ? "a" : "b") : "";
     return `<button type="button" class="px-g ${g.status === "played" ? "done" : ""}" data-mid="${g.id}"><em>${legLbl(g)}</em>
@@ -4709,7 +4784,7 @@ function renderPartidos() {
       <small>${g.status === "played" ? `${g.map ? esc(g.map) + " · " : ""}${g.noShow ? "W.O." : g.ot ? "Prórroga" : "Final"}` : g.date ? fmtDate(g.date) : "A confirmar"}</small></button>`; }).join("")}</div>`;
   root.innerHTML = fs.map(f => { const gs = cruceGroups(list.filter(m => m.fecha === f)), anyP = D.played.some(m => m.fecha === f), d = list.find(m => m.fecha === f && m.date);
     return `<section class="px-f"><header><h3>Fecha ${f}</h3><span class="muted">${d ? fmtDate(d.date, false) : ""}</span><span class="sp"></span>${isUltra() ? `<button class="btn sm ghost px-del" data-px-del="${f}">Borrar fecha</button>` : ""}${anyP ? `<button class="btn sm ghost" data-px-img="${f}">${ico("i-image")}<span>Imagen de la fecha</span></button>` : ""}</header><div class="px-list">${gs.map(card).join("")}</div></section>`; }).join("")
-    || `<p class="empty">${okMs().length ? "No hay partidos con ese filtro." : "Todavía no hay fixture."}</p>`;
+    || `<p class="empty">${matches.length ? "No hay partidos con esos filtros." : "Todavía no hay fixture."}</p>`;
 }
 $("#pxRoot") && $("#pxRoot").addEventListener("click", e => {
   const g = e.target.closest("[data-mid]"); if (g) { openMatch(g.dataset.mid); return; }
@@ -4717,10 +4792,20 @@ $("#pxRoot") && $("#pxRoot").addEventListener("click", e => {
   const dl = e.target.closest("[data-px-del]"); if (dl) deleteFechas([+dl.dataset.pxDel]);
 });
 $("#pxTeam") && $("#pxTeam").addEventListener("change", e => { S.px.team = e.target.value; renderPartidos(); });
+$("#pxFecha") && $("#pxFecha").addEventListener("change", e => { S.px.fecha = e.target.value; renderPartidos(); });
+$("#pxReset") && $("#pxReset").addEventListener("click", () => {
+  S.px = {...DEFAULT_MATCH_FILTERS};
+  renderPartidos();
+  $("#pxTeam").focus();
+});
 $("#pxShow") && $("#pxShow").addEventListener("click", e => { const b = e.target.closest("[data-show]"); if (b) { S.px.show = b.dataset.show; renderPartidos(); } });
 $("#pxGen") && $("#pxGen").addEventListener("click", () => openFixtureGen());
 $("#pxDelAll") && $("#pxDelAll").addEventListener("click", () => deleteFechas(null));
-$("#pxIcs") && $("#pxIcs").addEventListener("click", () => { const k = S.px.team; exportIcs(D.pending.filter(m => k === "all" || m.a === k || m.b === k), k === "all" ? "fixture" : k); });
+$("#pxIcs") && $("#pxIcs").addEventListener("click", () => {
+  const {team, fecha} = S.px;
+  const label = team === "all" ? "fixture" : team;
+  exportIcs(filteredMatches(okMs()).filter(m => m.status !== "played"), fecha === "all" ? label : label + "-fecha-" + fecha);
+});
 
 // ---------- centro del partido ----------
 function boxRows(m, k) {
@@ -5279,6 +5364,61 @@ function vsHtml(pid) {
 function renderVsBlocks(pid) { $$(`[data-vs="${pid}"]`).forEach(el => { el.outerHTML = vsHtml(pid); }); }
 document.addEventListener("click", e => { const b = e.target.closest("[data-vs-up]"); if (b) { e.preventDefault(); e.stopPropagation(); vsRefresh(b.dataset.vsUp); } }, true);
 
+document.addEventListener("click", async e => {
+  const trigger = e.target.closest("[data-tiebreak],[data-recruit]");
+  if (!trigger || trigger.disabled) return;
+  if (trigger.dataset.tiebreak) {
+    trigger.disabled = true;
+    try {
+      const r = await api("/api/results",{action:"tiebreak",mid:trigger.dataset.tiebreak});
+      if (D.ms.some(m=>m.id===r.id)) openResult(r.id,"cap");
+      else toast("Desempate registrado. Cargá su captura en Panel de capitán → Resultados.");
+    } catch (err) { toast(err.message); } finally { trigger.disabled = false; }
+    return;
+  }
+  const mode = trigger.dataset.recruit, staff = mode === "staff", roles = mode === "roles";
+  modal(`<div class="box cut rec-box"><header class="bh"><div><div class="eyebrow">ONYX · Reclutamiento</div><h3>${roles?"Revisión de planteles":staff?"Encuestas y pagos":"Postulaciones"}</h3></div><button class="x" data-close aria-label="Cerrar">×</button></header><div class="bb" id="recBody" aria-live="polite">Cargando…</div></div>`);
+  const body = $("#recBody");
+  const detail = (label,value) => `<div><dt>${esc(label)}</dt><dd>${esc(value || "—")}</dd></div>`;
+  try {
+    if (roles) {
+      let after = null, rows = [];
+      do {
+        const page = await api("/api/recruitment",{action:"roles",after});
+        if (!body.isConnected) return;
+        rows.push(...page.rows); after = page.next;
+      } while (after);
+      body.innerHTML = rows.length ? '<p>Revisá estas diferencias y confirmá los cambios desde Panel → Jugadores.</p>'+rows.map(x=>`<article class="rec-card"><h4>${esc(x.player || x.discord)}</h4><dl>${detail("Discord",x.discord)}${detail("Equipo en la web",x.actual ? TM(x.actual)?.name || x.actual : "Sin equipo")}${detail("Según los roles",x.roles.map(k=>TM(k)?.name || k).join(", "))}</dl><strong>${esc(x.issue)}</strong>${x.pid ? `<button type="button" class="btn sm ghost" data-review-player="${esc(x.pid)}">Abrir jugador</button>` : ""}</article>`).join("") : "Los integrantes con roles de equipo coinciden con sus fichas.";
+      body.addEventListener("click",ev=>{
+        const id = ev.target.closest("[data-review-player]")?.dataset.reviewPlayer;
+        if (!id) return;
+        closeModal(); S.adm.pTeam = "all"; renderAdmin();
+        const row = [...document.querySelectorAll("#adminRoot select[data-bind]")].find(el=>el.dataset.bind === "player:"+id+":team");
+        if (row) { row.scrollIntoView({block:"center"}); row.focus(); }
+      });
+      return;
+    }
+    let data;
+    if (staff) data = await api("/api/recruitment",{action:"list"});
+    else {
+      const response = await fetch("/api/recruitment");
+      if (!response.ok) throw new Error("No se pudieron cargar las postulaciones.");
+      data = await response.json();
+    }
+    if (!body.isConnected) return;
+    body.innerHTML = data.rows.map(r=>`<article class="rec-card"><header><div><small>${esc(r.discord)} · ${esc(r.pais)}</small><h4>${esc(r.riot)}</h4></div><b>${esc(r.principal)}</b></header><dl>${detail("Rango actual",r.rango)}${detail("Peak elo",r.peak)}${detail("Rol secundario",r.secundario)}${detail("Abierto a otros roles",r.flex)}${detail("Agentes",r.agentes)}${detail("Disponibilidad",r.horarios)}${staff?detail("Por qué ficharlo",r.motivo)+detail("Se postula a capitán",r.capitan)+detail("Declara haber pagado US$ 2",r.pago)+detail("Dudas",r.dudas)+detail("Sugerencias",r.sugerencias):""}</dl>${staff?`<div class="rowbtns"><strong data-payment-status>${r.paid?"Pagado":"Pago pendiente"}</strong><button type="button" class="btn sm ghost" data-payment="${esc(r.id)}" data-paid="${!!r.paid}">${r.paid?"Marcar pendiente":"Confirmar pago"}</button></div>`:""}</article>`).join("") || "Todavía no hay postulaciones.";
+    if (staff) body.addEventListener("click",async ev=>{
+      const btn = ev.target.closest("[data-payment]"); if (!btn || btn.disabled) return;
+      btn.disabled = true;
+      try {
+        const paid = btn.dataset.paid !== "true";
+        await api("/api/recruitment",{action:"payment",id:btn.dataset.payment,paid});
+        btn.dataset.paid = String(paid); btn.textContent = paid?"Marcar pendiente":"Confirmar pago";
+        btn.parentNode.querySelector("[data-payment-status]").textContent = paid?"Pagado":"Pago pendiente";
+      } catch (err) { toast(err.message); } finally { btn.disabled = false; }
+    });
+  } catch (err) { if (body.isConnected) body.textContent = err.message; }
+});
 /* ================= arranque ================= */
 buildOrbit();
 paintCached();

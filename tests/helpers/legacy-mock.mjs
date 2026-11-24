@@ -60,5 +60,5 @@ export const db = {
     };
     return q();
   },
-  runTransaction: async (fn) => fn({ get: (r) => r.get(), set: (r, d, o) => r.set(d, o) }),
+  runTransaction: async (fn) => fn({ get: (r) => r.get(), getAll: (...refs) => Promise.all(refs.map(r => r.get())), set: (r, d, o) => r.set(d, o) }),
 };

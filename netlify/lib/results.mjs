@@ -6,7 +6,7 @@
 export const RES_DEF = { auto: true, ai: true, aiDaily: 30 };
 export const resCfg = (cfg) => ({ ...RES_DEF, ...((cfg && cfg.results) || {}) });
 
-const int = (v, max) => { const n = Math.round(+v); return Number.isFinite(n) && n >= 0 && n <= max ? n : null; };
+const int = (v, max) => { if (v == null || v === "") return null; const n = Number(v); return Number.isInteger(n) && n >= 0 && n <= max ? n : null; };
 
 // Valida y limpia lo que manda el capitán. players: { pid: { team } } (de la liga)
 export function cleanSubmission(b, m, players) {

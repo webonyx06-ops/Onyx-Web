@@ -22,7 +22,9 @@ async function league(maxAge = 20000) {
 const opt = (data, name) => ((data.options || []).find((o) => o.name === name) || {}).value;
 const userName = (i) => { const u = (i.member && i.member.user) || i.user || {}; return (i.member && i.member.nick) || u.global_name || u.username || "alguien"; };
 
+import { survey } from '../lib/recruitment.mjs';
 async function command(i) {
+  if (["encuesta","postular"].includes(i.data.name)) return survey(i);
   const d = i.data, name = d.name;
   if (name === "anuncio") return announce(i);
   if (name === "rol") return roleCmd(i);
@@ -116,7 +118,7 @@ async function withDeadline(i, work, context) {
     const { appId } = env();
     context.waitUntil(p.then((data) => fetch(`https://discord.com/api/v10/webhooks/${appId}/${i.token}/messages/@original`, {
       method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify(data) })));
-    return json({ type: 5 });
+    return json({ type: 5, data: {flags: ["postular","rol","anuncio"].includes(i.data.name) ? 64 : 0} });
   }
   return reply(await p);
 }

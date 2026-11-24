@@ -64,7 +64,9 @@ export const sendMessage = (channelId, payload) => api("POST", `/channels/${chan
 export const PERM = { ADMIN: 1n << 3n, MANAGE_GUILD: 1n << 5n, MANAGE_ROLES: 1n << 28n };
 export const hasPerm = (member, bit) => { try { const p = BigInt(member && member.permissions || 0); return (p & PERM.ADMIN) === PERM.ADMIN || (p & bit) === bit; } catch (_) { return false; } };
 
+import { recruitmentCommands } from './survey-fields.mjs';
 export const COMMANDS = [
+  ...recruitmentCommands,
   { name: "tabla", description: "Tabla de posiciones de la liga" },
   { name: "proximos", description: "Próximos partidos con día, hora y mapa" },
   { name: "resultados", description: "Resultados de una fecha", options: [{ type: 4, name: "fecha", description: "Número de fecha (si no ponés nada, la última jugada)", required: false, min_value: 1, max_value: 50 }] },
