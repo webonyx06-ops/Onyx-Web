@@ -610,7 +610,7 @@ function renderBanner() {
   else if (M.ex) { b.hidden = false; b.innerHTML = `<span><b>Datos de ejemplo.</b> La liga todavía no tiene resultados cargados, así que ves un ejemplo de cómo va a quedar.</span><button class="linkbtn" data-ex="off">Ver la liga real (vacía)</button>`; }
   else if (M.realEmpty && S.staff) { b.hidden = false; b.innerHTML = `<span>La liga está en cero: todavía no hay jugadores ni resultados. Cargalos desde el panel Admin.</span>`; }
   else b.hidden = true;
-  $("#heroChip span").textContent = `${M.cfg.season} · datos oficiales de la liga`;
+  $("#heroChip span").textContent = M.ex ? "Vista de ejemplo" : "Datos de la temporada";
   $("#footTxt").textContent = `ONYX · ${M.cfg.season}${M.ex ? " · datos de ejemplo" : ""}`;
 }
 $("#exBanner").addEventListener("click", e => { const b = e.target.closest("[data-ex]"); if (!b) return; S.exampleOn = b.dataset.ex === "on"; store.set("ex", S.exampleOn); schedule(); });
@@ -1791,7 +1791,7 @@ const roleSvg = r => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
 function renderTeams() {
   if (!S.teamSel) S.teamSel = S.my;
   $("#teams").innerHTML = TEAM_KEYS.map(k => { const r = D.real.find(x => x.k === k), t = TM(k);
-    return `<button class="tcard cut tilt ${S.teamSel === k ? "on" : ""}" data-t="${k}" style="--tc:${t.c}">${img(k)}<b>${esc(t.name)}</b><span>${r.pos}° · ${r.pts} pts · ${roster(k).length} jugadores</span></button>`; }).join("");
+    return `<button class="tcard cut tilt ${S.teamSel === k ? "on" : ""}" data-t="${k}" aria-pressed="${S.teamSel === k}" style="--tc:${t.c}"><small class="t-pos">${r.pos}°</small>${img(k)}<b>${esc(t.name)}</b><span>${r.pts} pts · ${roster(k).length} jugadores</span></button>`; }).join("");
   const k = S.teamSel, t = TM(k), r = D.real.find(x => x.k === k);
   const rs = roster(k).sort((a, b) => (b.id === t.captain) - (a.id === t.captain) || ROLES.indexOf(a.role) - ROLES.indexOf(b.role));
   $("#teamDetail").style.setProperty("--tc", t.c);
@@ -2896,23 +2896,30 @@ function renderCap() {
         ${ed ? `<div class="fgrid">${fld("Valor nuevo", `<input id="ceV" type="number" min="${CAP_VAL_MIN}" max="${CAP_VAL_MAX}" step="50" value="${clamp(raw.value != null ? +raw.value : p.value, CAP_VAL_MIN, CAP_VAL_MAX)}">`)}${fld("Cláusula de rescisión", `<input id="ceC" type="number" min="0" max="${CAP_CLAUSE_MAX}" step="50" value="${p.clause || 0}">`)}</div>
           <div class="rowbtns"><button class="btn sm gold" data-cap-act="send-edit:${p.id}">Enviar al staff</button><span class="adm-note">${ranges}</span></div>` : ""}</div>`;
     };
-    main = `<div class="adm-card"><h3>Plantel de ${esc(t.name)} <small>${rs.length} jugadores</small></h3>
+    main = `<div class="adm-card" id="capRosterSection" tabindex="-1"><h3>Plantel de ${esc(t.name)} <small>${rs.length} jugadores</small></h3>
         <div class="cap-roster">${rs.map(row).join("") || '<p class="adm-note">Tu equipo todavía no tiene jugadores. Agregalos abajo.</p>'}</div></div>
       <div class="adm-card"><h3>Agregar un jugador</h3><div class="fgrid">
         ${fld("Nombre", `<input id="caN" maxlength="30" placeholder="Nick del jugador" autocomplete="off">`)}${fld("Rol", `<select id="caR">${roleOpts("Duelista")}</select>`)}${fld("Rango (opcional)", `<input id="caK" maxlength="30" placeholder="Ej: Inmortal 1" autocomplete="off">`)}${fld("Riot ID (para Tracker)", `<input id="caI" maxlength="22" placeholder="Ej: Jagger#LAS" autocomplete="off" spellcheck="false">`)}
         ${fld("Valor", `<input id="caV" type="number" min="${CAP_VAL_MIN}" max="${CAP_VAL_MAX}" step="50" value="500">`)}${fld("Cláusula de rescisión", `<input id="caC" type="number" min="0" max="${CAP_CLAUSE_MAX}" step="50" value="0">`)}</div>
         <div class="rowbtns"><button class="btn sm gold" data-cap-act="send-add">Enviar al staff</button><span class="adm-note">${ranges}</span></div></div>
-      <div class="adm-card"><h3>Tus solicitudes <small>${reqs.filter(r => r.status === "pend").length} esperando al staff</small></h3><div style="display:grid;gap:6px">
+      <div class="adm-card" id="capRequestSection" tabindex="-1"><h3>Tus solicitudes <small>${reqs.filter(r => r.status === "pend").length} esperando al staff</small></h3><div style="display:grid;gap:6px">
         ${reqs.map(r => { const st = {pend: ["En revisión", "pend", "var(--gold)"], ok: ["Aprobada", "ok", "var(--win)"], no: ["Rechazada", "no", "var(--loss)"]}[r.status] || ["?", "pend", "var(--dim)"];
           return `<div class="req" style="--st:${st[2]}">${img(r.team)}<div><div class="rq-t">${reqText(R, r)}</div><div class="rq-m">${new Date(r.at).toLocaleString("es-AR", {day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit"})}${r.reviewedBy ? ` · revisó ${esc(r.reviewedBy)}` : ""}${r.note ? ` · “${esc(r.note)}”` : ""}</div></div>
             <div class="rq-acts"><span class="st ${st[1]}">${st[0]}</span>${r.status === "pend" && r.by === c.uid ? `<button class="btn sm ghost" data-cap-act="cancel:${r.id}">Cancelar</button>` : ""}</div></div>`; }).join("") || '<p class="adm-note">Todavía no mandaste solicitudes.</p>'}</div></div>`;
   }
+  const results = k ? capResultsCard(k) : "";
   root.innerHTML = `<div class="adm" role="dialog" aria-modal="true" aria-label="Panel del capitán"><div class="adm-panel" style="width:min(820px,100%)">
     <div class="adm-head"><div class="adm-title" ${t ? `style="--tc:${t.c}"` : ""}>${t && EMB[k] ? img(k, "adm-em") : ico("i-crown")}<div><h2>Panel de capitán</h2><span class="save-state">${t ? esc(t.name) : "Sin equipo asignado"}</span></div></div><span class="sp"></span><span class="who-chip">${ico("i-crown")}${esc(c.u)}<small>Capitán</small></span>
       ${k ? `<button class="btn sm gold" data-cap-act="market">${ico("i-coins")}<span>Fichar jugadores</span></button><button class="btn sm" data-cap-act="scout">${ico("i-scope")}<span>Ojear jugadores</span></button>` : ""}<button class="btn sm ghost" data-cap-act="logout">${ico("i-logout")}<span>Cerrar sesión</span></button><button class="btn sm ghost icon-only" data-cap-act="close" aria-label="Cerrar el panel" title="Cerrar (Esc)">${ico("i-close")}</button></div>
-    <div class="adm-body">${t ? `<div class="ex-banner cut-s" style="margin:0;--tc:${t.c}"><span>Todo lo que pidas acá lo revisa el staff antes de que aparezca en la liga.</span></div>` : ""}${k ? capResultsCard(k) + capLinksCard(k) + capCoachRegCard(k) + capAttCard(k) : ""}${main}${k ? capMapCard(k) + capCoachCard(k) + capPayCard(k) + capCanjesCard(k) : ""}</div></div></div>`;
+    <div class="adm-body">${k ? `<nav class="cap-jumps" aria-label="Atajos del panel">${results ? '<button type="button" data-cap-jump="capResultsSection">Resultados</button>' : ""}<button type="button" data-cap-jump="capRosterSection">Plantel</button><button type="button" data-cap-jump="capRequestSection">Solicitudes</button></nav>` : ""}${results}${main}${k ? capAttCard(k) + capLinksCard(k) + capCoachRegCard(k) : ""}${k ? capMapCard(k) + capCoachCard(k) + capPayCard(k) + capCanjesCard(k) : ""}</div></div></div>`;
   const nb = $(".adm-body", root); if (nb) nb.scrollTop = scroll;
 }
+$("#capRoot").addEventListener("click", e => {
+  const button = e.target.closest("[data-cap-jump]");
+  if (!button) return;
+  const target = document.getElementById(button.dataset.capJump);
+  if (target) { target.scrollIntoView({block:"start",behavior: reduced ? "auto" : "smooth"}); target.focus({preventScroll:true}); }
+});
 $("#capRoot").addEventListener("focusout", () => setTimeout(() => { const ae = document.activeElement; if (S.cap.dirty && !($("#capRoot").contains(ae) && ae.matches("input,select,textarea"))) { S.cap.dirty = false; renderCap(); } }, 30));
 function capCanjesCard(k) {
   const rs = roster(k).map(p => ({p, s: saldoOf(p.id)})).sort((a, b) => b.s - a.s), pend = redeemList().filter(r => r.team === k && r.status === "pend").length;
@@ -3589,6 +3596,10 @@ function goView(id, o = {}) {
 const scrollToEl = Element.prototype.scrollIntoView;
 Element.prototype.scrollIntoView = function (o) { const v = viewOf(this); if (v && v !== curView) goView(v, {replace: false}); return scrollToEl.call(this, o); };
 function markNav() {
+  $$(".mobile-links a").forEach(link => {
+    if (link.dataset.shortcut === curView) link.setAttribute("aria-current","page");
+    else link.removeAttribute("aria-current");
+  });
   const a = $(`#nav a[data-v="${curView}"]`);
   $$("#nav a").forEach(x => { x.classList.toggle("on", x === a); if (x === a) x.setAttribute("aria-current", "page"); else x.removeAttribute("aria-current"); });
   const ind = $("#sideInd"); if (!ind) return;
@@ -3598,7 +3609,9 @@ function markNav() {
 const isDrawer = () => matchMedia("(max-width: 900px)").matches;
 function openSide() { if (!isDrawer()) return; document.body.classList.add("side-open"); $("#scrim").hidden = false; const fa = $("#nav a.on") || $("#nav a"); if (fa) fa.focus({preventScroll: true}); }
 function closeSide() { if (!document.body.classList.contains("side-open")) return; document.body.classList.remove("side-open"); $("#scrim").hidden = true; }
+$("#heroCap").addEventListener("click",openCap);
 function shellState() {
+  $("#heroCap").hidden = !S.captain;
   $("#staffLink").hidden = !!(S.staff || S.captain || S.member);
   const cnt = S.staff ? admCounts() : null, n = cnt ? cnt.req + cnt.off + cnt.rep + cnt.cj + cnt.sal + cnt.res : 0, bd = $("#admBadge");
   bd.hidden = !n; bd.textContent = n > 99 ? "99+" : String(n);
@@ -4142,7 +4155,7 @@ function capResultsCard(k) {
     return `<div class="req res-req" style="--st:var(--${st[1] === "ok" ? "win" : st[1] === "no" ? "loss" : "gold"})">${img(rival)}<div><div class="rq-t"><b>F${m.fecha}${m.leg ? " " + LEG_L[m.leg] : ""}</b> vs ${esc(TM(rival).name)}${r ? ` · <span class="mono">${r.ra}-${r.rb}</span>` : ""}</div>
       <div class="rq-m">${fmtDate(m.date)}${r && r.check && r.status === "pend" ? ` · ${esc(r.check)}` : ""}${r && r.status === "rej" && r.reviewNote ? ` · “${esc(r.reviewNote)}”` : ""}</div></div>
       <div class="rq-acts"><span class="st ${st[1]}">${st[0]}</span>${m.status !== "played" ? `<button class="btn sm ${r ? "ghost" : "gold"}" data-cap-act="res:${m.id}">${r ? "Corregir" : "Cargar resultado"}</button>` : ""}</div></div>`; };
-  return `<div class="adm-card"><h3>${ico("i-check")} Resultados <small>subí la captura del marcador después de jugar</small></h3><div style="display:grid;gap:6px">${list.map(row).join("")}${ties.map(m=>`<button class="btn sm" data-tiebreak="${esc(m.id)}">Jugamos desempate · F${m.fecha} vs ${esc(TM(m.a===k?m.b:m.a).name)}</button>`).join("")}</div>
+  return `<div class="adm-card" id="capResultsSection" tabindex="-1"><h3>${ico("i-check")} Resultados <small>subí la captura del marcador después de jugar</small></h3><div style="display:grid;gap:6px">${list.map(row).join("")}${ties.map(m=>`<button class="btn sm" data-tiebreak="${esc(m.id)}">Jugamos desempate · F${m.fecha} vs ${esc(TM(m.a===k?m.b:m.a).name)}</button>`).join("")}</div>
     <p class="adm-note">${resCfgC().auto ? "Cuando los dos capitanes mandan el mismo resultado, se carga solo en la tabla. Si no coinciden, lo revisa el staff con las dos capturas." : "El staff revisa cada resultado con la captura antes de cargarlo."}</p></div>`;
 }
 
@@ -4850,7 +4863,7 @@ function loadImg(src) {
   return imgCache[src] = new Promise(res => { const i = new Image(); i.onload = () => res(i); i.onerror = () => res(null); i.src = src; });
 }
 function rr(cx, x, y, w, h, r) { cx.beginPath(); cx.moveTo(x + r, y); cx.arcTo(x + w, y, x + w, y + h, r); cx.arcTo(x + w, y + h, x, y + h, r); cx.arcTo(x, y + h, x, y, r); cx.arcTo(x, y, x + w, y, r); cx.closePath(); }
-const FONT = (w, s) => `${w} ${s}px Archivo, Inter, "Segoe UI", Arial, sans-serif`;
+const FONT = (w, s) => `${w} ${s}px "DM Sans", "Segoe UI", Arial, sans-serif`;
 function fitText(cx, txt, max) { let t = String(txt); while (t.length > 1 && cx.measureText(t).width > max) t = t.slice(0, -1); return t === String(txt) ? t : t.slice(0, -1) + "…"; }
 async function shareImage(kind, o = {}) {
   toast("Armando la imagen…");

@@ -22,9 +22,10 @@
 <link rel="manifest" href="site.webmanifest">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,300..800&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&amp;family=DM+Sans:wght@400;500;600;700&amp;display=swap">
 <link rel="stylesheet" href="css/styles.css">
 <script>try { if (JSON.parse(localStorage.getItem("liga-t1:side")) === true) document.documentElement.classList.add("side-mini"); } catch (e) {}</script>
+<link rel="stylesheet" href="css/league.css">
 </head>
 <body>
 <svg xmlns="http://www.w3.org/2000/svg" width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
@@ -92,35 +93,35 @@
     </a>
     <nav class="side-nav" id="nav" aria-label="Secciones">
       <span class="side-ind" id="sideInd" aria-hidden="true"></span>
-      <div class="ngrp"><span class="ngrp-t">Liga</span>
-        <a href="#inicio" data-v="inicio"><svg class="ic"><use href="#i-home"/></svg><span>Inicio</span></a>
-        <a href="#tabla" data-v="tabla"><svg class="ic"><use href="#i-table"/></svg><span>Tabla</span></a>
-        <a href="#partidos" data-v="partidos"><svg class="ic"><use href="#i-calendar"/></svg><span>Partidos</span></a>
-        <a href="#playoffs" data-v="playoffs" id="navPo" hidden><svg class="ic"><use href="#i-trophy"/></svg><span>Playoffs</span></a>
-        <a href="#mapas" data-v="mapas"><svg class="ic"><use href="#i-map"/></svg><span>Mapas</span></a>
-        <a href="#rankings" data-v="rankings"><svg class="ic"><use href="#i-chart"/></svg><span>Rankings</span></a>
-        <a href="#premios" data-v="premios"><svg class="ic"><use href="#i-trophy"/></svg><span>Premios</span></a>
-        <a href="#logros" data-v="logros"><svg class="ic"><use href="#i-medal"/></svg><span>Logros</span></a>
-        <a href="#historia" data-v="historia"><svg class="ic"><use href="#i-history"/></svg><span>Historia</span></a>
-      </div>
-      <div class="ngrp"><span class="ngrp-t">Jugadores</span>
-        <a href="#perfil" data-v="perfil"><svg class="ic"><use href="#i-user"/></svg><span>Mi perfil</span></a>
-        <a href="#scouting" data-v="scouting"><svg class="ic"><use href="#i-scope"/></svg><span>Scouting</span></a>
-        <a href="#equipos" data-v="equipos"><svg class="ic"><use href="#i-shield"/></svg><span>Equipos</span></a>
-        <a href="#seguimiento" data-v="seguimiento" id="navSeg" hidden><svg class="ic"><use href="#i-pulse"/></svg><span>Seguimiento</span></a>
-        <a href="#canjes" data-v="canjes"><svg class="ic"><use href="#i-gift"/></svg><span>Canjes</span></a>
-      </div>
-      <div class="ngrp"><span class="ngrp-t">Capitanes</span>
-        <a href="#elegir-mapa" data-v="elegir-mapa" id="navMp" hidden><svg class="ic"><use href="#i-flag"/></svg><span>Mi mapa</span><i class="ndot" id="navMpDot" hidden></i></a>
-        <a href="#mercado" data-v="mercado" id="navMk" hidden><svg class="ic"><use href="#i-coins"/></svg><span>Mercado</span></a>
-      </div>
-      <div class="ngrp"><span class="ngrp-t">Comunidad</span>
-        <a href="#pronosticos" data-v="pronosticos"><svg class="ic"><use href="#i-target"/></svg><span>Pronósticos</span></a>
-        <a href="#capitania" data-v="capitania"><svg class="ic"><use href="#i-crown"/></svg><span>Capitanía</span></a>
-        <a href="#fairplay" data-v="fairplay"><svg class="ic"><use href="#i-scale"/></svg><span>Fair play</span></a>
-        <a href="#reglamento" data-v="reglamento"><svg class="ic"><use href="#i-book"/></svg><span>Reglamento</span></a>
-        <a href="#ideas" data-v="ideas"><svg class="ic"><use href="#i-bulb"/></svg><span>La propuesta</span></a>
-      </div>
+      <div class="ngrp"><span class="ngrp-t">Competencia</span>
+        <a href="#inicio" data-v="inicio" aria-label="Inicio"><svg class="ic"><use href="#i-home"/></svg><span>Inicio</span></a>
+        <a href="#partidos" data-v="partidos" aria-label="Partidos"><svg class="ic"><use href="#i-calendar"/></svg><span>Partidos</span></a>
+        <a href="#tabla" data-v="tabla" aria-label="Posiciones"><svg class="ic"><use href="#i-table"/></svg><span>Posiciones</span></a>
+        <a href="#rankings" data-v="rankings" aria-label="Rankings"><svg class="ic"><use href="#i-chart"/></svg><span>Rankings</span></a>
+        <a href="#playoffs" data-v="playoffs" aria-label="Playoffs" id="navPo" hidden><svg class="ic"><use href="#i-trophy"/></svg><span>Playoffs</span></a>
+        <a href="#mapas" data-v="mapas" aria-label="Mapas"><svg class="ic"><use href="#i-map"/></svg><span>Mapas</span></a>
+</div>
+<div class="ngrp"><span class="ngrp-t">Planteles y fichajes</span>
+        <a href="#equipos" data-v="equipos" aria-label="Equipos"><svg class="ic"><use href="#i-shield"/></svg><span>Equipos</span></a>
+        <a href="#scouting" data-v="scouting" aria-label="Explorar jugadores"><svg class="ic"><use href="#i-scope"/></svg><span>Explorar jugadores</span></a>
+        <a href="#mercado" data-v="mercado" aria-label="Mercado" id="navMk" hidden><svg class="ic"><use href="#i-coins"/></svg><span>Mercado</span></a>
+        <a href="#seguimiento" data-v="seguimiento" aria-label="Seguimiento" id="navSeg" hidden><svg class="ic"><use href="#i-pulse"/></svg><span>Seguimiento</span></a>
+</div>
+<div class="ngrp"><span class="ngrp-t">Mi liga</span>
+        <a href="#perfil" data-v="perfil" aria-label="Mi perfil"><svg class="ic"><use href="#i-user"/></svg><span>Mi perfil</span></a>
+        <a href="#elegir-mapa" data-v="elegir-mapa" aria-label="Mi mapa" id="navMp" hidden><svg class="ic"><use href="#i-flag"/></svg><span>Mi mapa</span><i class="ndot" id="navMpDot" hidden></i></a>
+        <a href="#pronosticos" data-v="pronosticos" aria-label="Pronósticos"><svg class="ic"><use href="#i-target"/></svg><span>Pronósticos</span></a>
+        <a href="#canjes" data-v="canjes" aria-label="Canjes"><svg class="ic"><use href="#i-gift"/></svg><span>Canjes</span></a>
+        <a href="#capitania" data-v="capitania" aria-label="Capitanía"><svg class="ic"><use href="#i-crown"/></svg><span>Capitanía</span></a>
+</div>
+<div class="ngrp"><span class="ngrp-t">Temporada y comunidad</span>
+        <a href="#premios" data-v="premios" aria-label="Premios"><svg class="ic"><use href="#i-trophy"/></svg><span>Premios</span></a>
+        <a href="#logros" data-v="logros" aria-label="Logros"><svg class="ic"><use href="#i-medal"/></svg><span>Logros</span></a>
+        <a href="#historia" data-v="historia" aria-label="Historia"><svg class="ic"><use href="#i-history"/></svg><span>Historia</span></a>
+        <a href="#fairplay" data-v="fairplay" aria-label="Fair play"><svg class="ic"><use href="#i-scale"/></svg><span>Fair play</span></a>
+        <a href="#reglamento" data-v="reglamento" aria-label="Reglamento"><svg class="ic"><use href="#i-book"/></svg><span>Reglamento</span></a>
+        <a href="#ideas" data-v="ideas" aria-label="La propuesta"><svg class="ic"><use href="#i-bulb"/></svg><span>La propuesta</span></a>
+</div>
     </nav>
     <div class="side-foot">
       <a class="side-act discord" id="discordBtn" href="#" target="_blank" rel="noopener" hidden aria-label="Unite al Discord de ONYX"><svg class="ic"><use href="#i-chat"/></svg><span>Unite al Discord</span><svg class="ic go"><use href="#i-arrow"/></svg></a>
@@ -156,15 +157,16 @@
         <div class="hero" id="hero">
           <div class="hero-copy">
             <div class="hero-season" id="heroEyebrow">Liga de Valorant</div>
-            <h1 class="hero-title"><span class="wm" aria-label="ONYX">ONYX</span></h1>
-            <p class="lede">La liga comunitaria de Valorant. Tabla en vivo, estadísticas de cada jugador, mercado de fichajes con ONYX Coins y sorteo de mapas, todo en un solo lugar.</p>
+            <h1 class="hero-title"><span class="wm">ONYX</span> <span class="wm-sub">League</span></h1>
+            <p class="lede">El calendario, los planteles y los resultados de la liga comunitaria de VALORANT.</p>
             <div class="cta">
-              <a class="btn gold" href="#tabla"><svg class="ic"><use href="#i-table"/></svg>Ver la tabla</a>
+              <a class="btn gold" href="#partidos"><svg class="ic"><use href="#i-calendar"/></svg>Ver partidos</a>
+              <a class="btn" href="#tabla"><svg class="ic"><use href="#i-table"/></svg>Posiciones</a>
+              <button class="btn" id="heroCap" type="button" hidden><svg class="ic"><use href="#i-crown"/></svg>Panel de capitán</button>
               <a class="btn" href="#elegir-mapa" id="heroMp" hidden><svg class="ic"><use href="#i-flag"/></svg><span id="heroMpTxt">Elegí tu mapa</span></a>
               <a class="btn" href="#perfil" id="heroAtt" hidden><svg class="ic"><use href="#i-check"/></svg><span id="heroAttTxt">Confirmá si jugás</span></a>
               <a class="btn" href="#mercado" id="heroMk" hidden><svg class="ic"><use href="#i-coins"/></svg>Abrir el mercado</a>
               <a class="btn dc-btn" href="#" id="heroDc" target="_blank" rel="noopener" hidden><svg class="ic"><use href="#i-chat"/></svg>Unite al Discord</a>
-              <a class="btn ghost" href="#mapas"><svg class="ic"><use href="#i-map"/></svg>Mapas y sorteo</a>
             </div>
             <div class="demo-chip" id="heroChip"><i></i><span>Datos oficiales de la liga</span></div>
           </div>
@@ -172,6 +174,13 @@
             <div class="orbit" id="orbit"><div class="ring"></div><div class="ring r2"></div></div>
             <div class="orbit-core"><img class="core-mark" src="assets/onyx-logo.png" alt="Logo de ONYX"><span id="coreFecha">Fecha 1</span></div>
           </div>
+        </div>
+
+        <div class="statbar" id="statbar">
+          <div><b class="num" id="stTeams">7</b><span>Equipos</span></div>
+          <div><b class="num" id="stPlayers">0</b><span>Jugadores</span></div>
+          <div><b class="num" id="stCoins">0</b><span>ONYX Coins en juego</span></div>
+          <div><b class="num" id="stFechas">0</b><span id="stFechasL">Fechas jugadas</span></div>
         </div>
 
         <div class="dash">
@@ -219,12 +228,6 @@
           </article>
         </div>
 
-        <div class="statbar" id="statbar">
-          <div><b class="num" id="stTeams">7</b><span>Equipos</span></div>
-          <div><b class="num" id="stPlayers">0</b><span>Jugadores</span></div>
-          <div><b class="num" id="stCoins">0</b><span>ONYX Coins en juego</span></div>
-          <div><b class="num" id="stFechas">0</b><span id="stFechasL">Fechas jugadas</span></div>
-        </div>
         <div class="ticker" aria-label="Últimas novedades"><div class="track" id="ticker"></div></div>
       </section>
 
@@ -585,6 +588,7 @@
       <p class="ft-legal">ONYX es una competencia comunitaria y no es una competencia oficial de Riot Games. ONYX fue creado bajo la política “Legal Jibber Jabber” de Riot Games usando recursos propiedad de Riot Games. Riot Games no respalda ni patrocina este proyecto.</p></footer>
   </div>
 </div>
+<nav class="mobile-links" aria-label="Accesos rápidos"><a href="#inicio" data-shortcut="inicio"><svg class="ic" aria-hidden="true"><use href="#i-home"/></svg>Inicio</a><a href="#partidos" data-shortcut="partidos"><svg class="ic" aria-hidden="true"><use href="#i-calendar"/></svg>Partidos</a><a href="#tabla" data-shortcut="tabla"><svg class="ic" aria-hidden="true"><use href="#i-table"/></svg>Tabla</a><a href="#equipos" data-shortcut="equipos"><svg class="ic" aria-hidden="true"><use href="#i-shield"/></svg>Equipos</a></nav>
 <div id="cmdRoot"></div>
 <div id="toasts" aria-live="polite"></div>
 <canvas id="confetti" aria-hidden="true"></canvas>
