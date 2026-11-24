@@ -12,7 +12,7 @@ export function profile(row) {
 }
 export const recruitmentCommands = [
   {name:"encuesta", description:"Habilitar este canal y publicar la encuesta de fichajes", default_member_permissions:"32",options:[{type:5,name:"crear_canal",description:"Crear o reutilizar el canal #postulaciones-onyx"}]},
-  {name:"postular", description:"Publicar mi ficha en la web de ONYX y enviar mi encuesta al staff", options:fields.map(([name,description]) => ({
+  {name:"postular", description:"Enviar mi postulación al staff para entrar al mercado de ONYX", options:fields.map(([name,description]) => ({
     type:3, name, description, required:!["dudas","sugerencias"].includes(name), max_length: name === "motivo" ? 600 : 220,
     ...(["capitan","pago"].includes(name) ? {choices:[{name:"Sí",value:"Sí"},{name:"No",value:"No"}]} : {})
   }))}

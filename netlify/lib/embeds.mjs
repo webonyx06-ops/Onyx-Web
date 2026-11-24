@@ -8,10 +8,11 @@ const hex = (c) => { const n = parseInt(String(c || "").replace("#", ""), 16); r
 const emblem = (k, L) => {
   const t = L && L.teams && L.teams[k];
   if (t && t.logoAt) return `${env().site}/api/logo/${k}?v=${t.logoAt}`;
+  if (k==="onyx") return `${env().site}/assets/emblemas/onyx.webp?v=11`;
   return BASE_KEYS.includes(k) ? `${env().site}/assets/emblemas/${k}.webp` : undefined;
 };
 const thumb = (k, L) => { const u = emblem(k, L); return u ? { url: u } : undefined; };
-const footer = (L) => ({ text: `ONYX Bot · ${L && L.cfg ? L.cfg.season : "Liga ONYX"}`, icon_url: `${env().site}/icon-192.png` });
+const footer = (L) => ({ text: `ONYX Bot · ${L && L.cfg ? L.cfg.season : "Liga ONYX"}`, icon_url: `${env().site}/icon-192.png?v=11` });
 const when = (d) => d ? `${ts(d, "F")} (${ts(d, "R")})` : "Día y hora a confirmar";
 const pad = (s, n) => String(s).slice(0, n).padEnd(n);
 const lpad = (s, n) => String(s).slice(0, n).padStart(n);
@@ -134,7 +135,7 @@ export function awardsEmbed(L) {
 }
 
 export function helpEmbed(L) {
-  return { title: "ONYX Bot", color: ONYX_COLOR, thumbnail: { url: `${env().site}/icon-192.png` }, footer: footer(L),
+  return { title: "ONYX Bot", color: ONYX_COLOR, thumbnail: { url: `${env().site}/icon-192.png?v=11` }, footer: footer(L),
     description: "Estoy conectado a la web de la liga: todo lo que muestro sale de ahí, en vivo.",
     fields: [
       { name: "Liga", value: "`/tabla` · `/proximos` · `/resultados` · `/premios` · `/mercado`", inline: false },

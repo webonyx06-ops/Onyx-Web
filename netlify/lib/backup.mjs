@@ -2,11 +2,11 @@
 // Se hace una sola por día (backup-cron) y una antes de cada borrado grande, de cerrar la temporada o de restaurar.
 // Se guardan las últimas 30 diarias y las últimas 40 manuales.
 
-// No se copian: capturas de resultados (pesadas y temporales), el resumen público (se rearma solo) y su cola
-const SKIP_COLL = new Set(["resultimg", "pubqueue"]);
+// El resumen público y su cola se regeneran. La evidencia se conserva junto con el partido.
+const SKIP_COLL = new Set(["pubqueue"]);
 const SKIP_DOC = new Set(["public/snapshot"]);
 // No se pisan al restaurar: cuentas (van atadas al login), auditoría, ONYX Bot y lo que se rearma solo
-export const NO_RESTORE = new Set(["staff", "captains", "audit", "bot", "resultimg", "public", "pubqueue", "sys"]);
+export const NO_RESTORE = new Set(["staff", "captains", "audit", "bot", "public", "pubqueue", "sys"]);
 export const KEEP = { daily: 30, manual: 40 };
 
 // Fechas de Firestore (Timestamp) → { __ts: ms } para poder volver a guardarlas igual
@@ -88,10 +88,12 @@ export async function restoreAll(db, data, { only = null, Timestamp = null } = {
   const add = async (fn) => { fn(batch); ops++; if (ops >= 400) await flush(); };
   for (const [c, docs] of Object.entries(data.colls)) {
     if (NO_RESTORE.has(c) || (only && !only.includes(c))) continue;
+    if (c === "resultimg") await flush();
     const cur = await db.collection(c).get();
     let del = 0, put = 0;
-    for (const d of cur.docs) if (!(d.id in docs)) { await add((b) => b.delete(d.ref)); del++; }
-    for (const [id, v] of Object.entries(docs)) { await add((b) => b.set(db.doc(`${c}/${id}`), dec(v, Timestamp))); put++; }
+    for (const d of cur.docs) if (!(d.id in docs)) { await add((b) => b.delete(d.ref)); del++; if (c === "resultimg" && ops>=5) await flush(); }
+    for (const [id, v] of Object.entries(docs)) { await add((b) => b.set(db.doc(`${c}/${id}`), dec(v, Timestamp))); put++; if (c === "resultimg" && ops>=5) await flush(); }
+    if (c === "resultimg") await flush();
     done[c] = { put, del };
   }
   await flush();

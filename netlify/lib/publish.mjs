@@ -36,7 +36,7 @@ function plain(v) {
 export function pubDoc(coll, id, data) {
   if (data == null) return null;
   const d = plain(data);
-  if (coll === "logos") return typeof d.data === "string" && d.data.startsWith("data:") ? { data: imgUrl("logos", id, d.data), at: d.at || 0 } : { data: d.data || "", at: d.at || 0 };
+  if (coll === "logos") return typeof d.data === "string" && d.data.startsWith("data:") ? { data: imgUrl("logos", id, d.data), at: d.at || 0, ...(d.brandVersion?{brandVersion:d.brandVersion}:{}) } : { data: d.data || "", at: d.at || 0, ...(d.brandVersion?{brandVersion:d.brandVersion}:{}) };
   if (coll === "prizes" && typeof d.img === "string" && d.img.startsWith("data:")) return { ...d, img: imgUrl("prizes", id, d.img) };
   return d;
 }

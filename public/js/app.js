@@ -1,6 +1,6 @@
 (() => {
 "use strict";
-const BASE_EMB = Object.fromEntries(["onyx","orion","nexus","zenith","vortex","zyriax","kyrox"].map(k => [k, `assets/emblemas/${k}.webp`]));
+const BASE_EMB = Object.fromEntries(["onyx","orion","nexus","zenith","vortex","zyriax","kyrox"].map(k => [k, `assets/emblemas/${k}.webp${k==="onyx"?"?v=11":""}`]));
 const EMB = {...BASE_EMB};
 const FB_CONFIG = window.FIREBASE_CONFIG || {};
 const FB_READY = !!(FB_CONFIG.apiKey && FB_CONFIG.projectId && window.firebase);
@@ -187,7 +187,7 @@ function syncTeams() {
   const custom = Object.keys(T).filter(k => !DEF_KEYS.includes(k) && /^[a-z0-9]{2,20}$/.test(k) && T[k] && T[k].custom && !T[k].hidden)
     .sort((a, b) => (+T[a].order || 0) - (+T[b].order || 0) || a.localeCompare(b));
   const keys = [...DEF_KEYS.filter(k => !(T[k] && T[k].hidden)), ...custom];
-  keys.forEach(k => { const d = T[k] || {}; EMB[k] = (Lg[k] && Lg[k].data) || BASE_EMB[k] || initialsLogo(d.name || k, d.c); });
+  keys.forEach(k => { const d = T[k] || {}; EMB[k] = (Lg[k] && (k!=="onyx" || Lg[k].brandVersion===11) && Lg[k].data) || BASE_EMB[k] || initialsLogo(d.name || k, d.c); });
   if (keys.join() !== TEAM_KEYS.join()) { TEAM_KEYS.length = 0; TEAM_KEYS.push(...keys); onTeamsChanged(); }
   else if (typeof renderOrbit === "function") renderOrbit(); // el logo llega después del equipo, o cambió el nombre o el color
 }
@@ -1265,7 +1265,9 @@ function signings(k) { return M.transfers.filter(t => t.to === k && (t.win ?? 0)
 const marketAccess = () => !!(S.captain || S.staff);
 function renderMarket() {
   const acc = marketAccess();
-  $("#mkLock").hidden = acc; $("#mkBody").hidden = !acc; $("#navMk").hidden = !acc; $("#heroMk").hidden = !acc; $("#mgrCoinsBox").hidden = !acc;
+  const available = D.P.filter(p=>!p.team && M.players[p.id]?.recruitment).sort((a,b)=>a.name.localeCompare(b.name));
+  $("#freePreview").innerHTML = available.length ? available.slice(0,4).map(p=>`<button type="button" class="free-preview-card" data-free-player="${esc(p.id)}"><b>${esc(p.name)}</b><span>${esc(p.role)} · ${esc(p.rank)}</span><strong>${fmt(p.value)} ONYX Coins</strong></button>`).join("") : '<p class="adm-note">Todavía no hay agentes libres con una postulación aprobada.</p>';
+  $("#mkLock").hidden = acc; $("#mkBody").hidden = !acc; $("#navMk").hidden = false; $("#heroMk").hidden = !acc; $("#mgrCoinsBox").hidden = !acc;
   if (!acc) { ["#cards", "#myOffers", "#allOffers", "#wallet"].forEach(id => { $(id).innerHTML = ""; }); return; }
   const t = TM(S.my), r = D.real.find(x => x.k === S.my), w = $("#wallet");
   w.style.setProperty("--tc", t.c);
@@ -1359,6 +1361,12 @@ function playerPerfHtml(p) {
   return `<div class="perf-mini"><div><b>${a.pct == null ? "–" : a.pct + "%"}</b><span>Asistencia</span></div><div><b>${fv("pts", pts)}</b><span>Puntos ind.</span></div><div><b>${fmt(saldoOf(p.id))}</b><span>Saldo canjes</span></div><div><b>${p.clause ? fmt(p.clause) : "–"}</b><span>Cláusula</span></div></div>
     ${hasSk ? `<div class="skill-bars">${SKILLS.map(([k, l]) => `<div><span class="muted">${l}</span><span class="bar"><i style="--w:${(+sk[k] || 0) * 10}%;--tc:${TM(p.lastTeam).c}"></i></span><span class="mono">${+sk[k] || "–"}</span></div>`).join("")}</div>` : ""}`;
 }
+function recruitmentProfile(p) {
+  const data=M.players[p.id]?.recruitment;
+  if (!data) return "";
+  const rows=[["Discord",data.discord],["Riot ID",M.players[p.id].ign || data.riot],["País",data.pais],["Rango actual",p.rank],["Peak elo",data.peak],["Rol principal",p.role],["Rol secundario",data.secundario],["Abierto a otros roles",data.flex],["Agentes",data.agentes],["Disponibilidad",data.horarios]];
+  return `<section class="rec-card"><h4>Ficha de jugador</h4><dl>${rows.map(([label,value])=>`<div><dt>${label}</dt><dd>${esc(value||"—")}</dd></div>`).join("")}</dl></section>`;
+}
 function openPlayer(id) {
   const p = D.PM[id]; if (!p) return;
   const tk = p.lastTeam, t = TM(tk), s = p.s, pool = D.P.filter(x => x.s.m);
@@ -1369,9 +1377,9 @@ function openPlayer(id) {
   const grid = [.25, .5, .75, 1].map(g => `<polygon points="${axes.map((_, i) => pt(i, g).join(",")).join(" ")}" fill="none" stroke="var(--line-2)"/>`).join("");
   const spokes = axes.map((_, i) => `<line x1="150" y1="150" x2="${pt(i, 1)[0]}" y2="${pt(i, 1)[1]}" stroke="var(--line)"/>`).join("");
   const labels = axes.map(([l], i) => { const [x, y] = pt(i, 1.2); return `<text x="${x}" y="${y}" text-anchor="middle" dominant-baseline="middle" fill="var(--muted)" font-size="11" font-family="JetBrains Mono, monospace">${l}</text>`; }).join("");
-  const isCap = p.team && M.teams[p.team].captain === p.id;
+  const isCap = p.team && M.teams[p.team]?.captain === p.id;
   modal(`<div class="box cut" style="--tc:${t.c}"><div class="bh">${img(tk)}<div><div class="eyebrow">${p.role}${isCap ? " · Capitán" : ""}</div><h3>${esc(p.name)}</h3><div class="muted" style="font-size:14px">${p.team ? esc(TM(p.team).name) : "Agente libre"} · Valor ${fmt(p.value)} · Cat. ${catOf(p.value)}${p.clause ? " · Cláusula " + fmt(p.clause) : ""}${ignOf(p.id) ? ` · <a class="an-trk" href="${trackerUrl(ignOf(p.id))}" target="_blank" rel="noopener noreferrer">${esc(ignOf(p.id))} ↗</a>` : ""}</div></div><button class="x" data-close aria-label="Cerrar">×</button></div>
-    <div class="bb"><svg class="radar" viewBox="0 0 300 300" role="img" aria-label="Perfil de ${esc(p.name)} comparado con el mejor de la liga">${grid}${spokes}
+    <div class="bb">${recruitmentProfile(p)}<svg class="radar" viewBox="0 0 300 300" role="img" aria-label="Perfil de ${esc(p.name)} comparado con el mejor de la liga">${grid}${spokes}
       <polygon class="val" points="${vals.map((v, i) => pt(i, v).join(",")).join(" ")}" fill="${t.c}" fill-opacity=".28" stroke="${t.l}" stroke-width="2"/>${vals.map((v, i) => `<circle cx="${pt(i, v)[0]}" cy="${pt(i, v)[1]}" r="3.5" fill="${t.l}"/>`).join("")}${labels}</svg>
       <p class="muted" style="font-size:12px;text-align:center;margin-top:-6px">Cada eje compara con el mejor de la liga en esa estadística.</p>
       <div class="sec-lbl">${ico("i-trophy")} En el torneo ONYX <small>${s.m} partido${s.m === 1 ? "" : "s"}</small></div>
@@ -1975,6 +1983,17 @@ const opt = (v, l, sel) => `<option value="${esc(v)}" ${sel ? "selected" : ""}>$
 const teamOpts = (sel, withFree) => (withFree ? opt("", "Agente libre", !sel) : "") + TEAM_KEYS.map(k => opt(k, RM().teams[k].name, sel === k)).join("");
 const roleOpts = sel => ROLES.map(r => opt(r, r, sel === r)).join("");
 const fld = (label, inner) => `<label class="fld"><span>${label}</span>${inner}</label>`;
+let applicationsCount = {at:0,value:null,loading:false};
+function showApplicationsCount() {
+  const paint = () => document.querySelectorAll("[data-application-count]").forEach(el=>{
+    el.textContent=applicationsCount.value===null?"":" · "+applicationsCount.value+" pendientes";
+  });
+  paint();
+  if (applicationsCount.loading || Date.now()-applicationsCount.at<60000) return;
+  applicationsCount.loading=true;
+  api("/api/recruitment",{action:"count"}).then(({pending})=>{applicationsCount.value=pending;paint();})
+    .catch(()=>{}).finally(()=>{applicationsCount.at=Date.now();applicationsCount.loading=false;});
+}
 function renderAdmin() {
   const root = $("#adminRoot");
   if (S.adm.open && !S.staff) S.adm.open = false;
@@ -1996,6 +2015,7 @@ function renderAdmin() {
       <button class="btn sm" data-act="stream">${ico("i-play")}<span>Modo streamer</span></button><button class="btn sm ghost" data-act="logout">${ico("i-logout")}<span>Cerrar sesión</span></button><button class="btn sm ghost icon-only" data-act="close" aria-label="Cerrar el panel" title="Cerrar (Esc)">${ico("i-close")}</button></div>
     <div class="adm-main"><nav class="adm-tabs" aria-label="Secciones del panel">${tabsHtml}</nav>
     <div class="adm-body">${S.adm.tab === "jugadores" ? `<div class="adm-card"><h3>Reclutamiento</h3><div class="rowbtns"><button class="btn sm" data-recruit="staff">Encuestas y pagos</button><button class="btn sm ghost" data-recruit="roles">Revisar planteles con Discord</button></div></div>` : ""}${M.ex ? `<div class="ex-banner cut-s" style="margin:0"><span><b>OJO</b> &nbsp;La página pública muestra datos de ejemplo porque la liga está vacía. Todo lo que cargues acá es real y reemplaza el ejemplo.</span></div>` : ""}${!S.db ? `<div class="ex-banner cut-s" style="margin:0"><span><b>SIN BASE DE DATOS</b> &nbsp;Abrí la página publicada para guardar cambios.</span></div>` : ""}${tabHtml}</div></div></div></div>`;
+  if (root.querySelector("[data-application-count]")) showApplicationsCount();
   setSaveState(); if (S.adm.tab === "staff") renderAuditList();
   const nb = $(".adm-body", root); if (nb) nb.scrollTop = scroll;
 }
@@ -2103,7 +2123,7 @@ function admInicio(R, Dr) {
         ${isUltra() ? `<button class="tile ${capNoTeam ? "hot" : ""}" data-act="tab:staff"><b>${caps.length}</b><span>capitanes${capNoTeam ? ` · ${capNoTeam} sin equipo` : ""}</span></button>` : ""}</div></div>
     <div class="adm-card"><h3>Accesos rápidos</h3><div class="quick">
       <button class="btn sm gold" data-act="tab:partidos">Cargar resultados y stats</button><button class="btn sm" data-act="tab:rendimiento">Asistencia y puntos</button>
-      <button class="btn sm" data-act="tab:jugadores">Agregar jugadores</button><button class="btn sm ghost" data-act="stream">Modo streamer</button></div></div>
+      <button class="btn sm" data-recruit="staff">Revisar postulaciones<span data-application-count></span></button><button class="btn sm" data-act="tab:jugadores">Agregar jugadores</button><button class="btn sm ghost" data-act="stream">Modo streamer</button></div></div>
     <div class="adm-card"><h3>Últimas solicitudes de capitanes</h3><div style="display:grid;gap:6px">${recent.map(r => reqRow(R, r, false)).join("") || '<p class="adm-note">Todavía no hay solicitudes.</p>'}</div>
       ${recent.length ? `<div class="rowbtns"><button class="btn sm ghost" data-act="tab:solicitudes">Ver todas</button></div>` : ""}</div>`;
 }
@@ -2127,7 +2147,7 @@ function reqRow(R, r, actions) {
 function admSolicitudes(R) {
   const L = Object.entries(S.requests).map(([id, r]) => ({id, ...r})).sort((a, b) => (a.status === "pend" ? 0 : 1) - (b.status === "pend" ? 0 : 1) || b.at - a.at);
   const pend = L.filter(r => r.status === "pend"), shown = S.adm.rqAll ? L : pend;
-  return `<div class="adm-card"><h3>Solicitudes de capitanes <small>${pend.length} pendientes · los capitanes no pueden cambiar nada sin tu aprobación</small></h3>
+  return `<div class="adm-card"><h3>Postulaciones de jugadores</h3><p class="adm-note">Revisá las solicitudes de la web y de Discord. Cada alta aprobada entra al mercado libre por 1.500 ONYX Coins.</p><div class="rowbtns"><button class="btn gold" data-recruit="staff">Revisar postulaciones<span data-application-count></span></button><button class="btn ghost" data-share-application>Copiar enlace de inscripción</button></div></div><div class="adm-card"><h3>Solicitudes de capitanes <small>${pend.length} pendientes · los capitanes no pueden cambiar nada sin tu aprobación</small></h3>
       <div class="seg"><button class="${S.adm.rqAll ? "" : "on"}" data-act="rq-filter:pend">Pendientes</button><button class="${S.adm.rqAll ? "on" : ""}" data-act="rq-filter:all">Todas</button></div>
       <div style="display:grid;gap:6px">${shown.map(r => reqRow(R, r, true)).join("") || `<p class="adm-note">${S.adm.rqAll ? "Todavía no hay solicitudes." : "No hay solicitudes pendientes."}</p>`}</div>
       <p class="adm-note">Al aprobar un alta, el jugador se crea en el equipo con el valor y la cláusula pedidos. Al aprobar un cambio, se actualizan el valor y la cláusula del jugador. Rangos que puede pedir un capitán: valor de ${fmt(CAP_VAL_MIN)} a ${fmt(CAP_VAL_MAX)}, cláusula hasta ${fmt(CAP_CLAUSE_MAX)}.</p></div>`;
@@ -2286,7 +2306,7 @@ async function teamAction(act, k, btn) {
 async function teamLogoUpload(k, file) {
   if (!isUltra()) { toast("Los logos los cambia solo ultra staff."); return; }
   try { toast("Subiendo logo…"); const data = await logoFromFile(file), at = Date.now();
-    await save(`logos/${k}`, {data, at, by: S.staff.u}); const d = teamDoc(k); d.logoAt = at; await save(`teams/${k}`, d);
+    await save(`logos/${k}`, {data, at, by: S.staff.u, ...(k==="onyx"?{brandVersion:11}:{})}); const d = teamDoc(k); d.logoAt = at; await save(`teams/${k}`, d);
     audit(`Cambió el logo de ${RM().teams[k].name}`); toast("Logo actualizado."); renderAdminSoon(); }
   catch (e) { toast(e.message || "No se pudo subir el logo."); }
 }
@@ -2443,7 +2463,7 @@ function openAdmin() { requireStaff(() => { S.adm.open = true; renderAdmin(); })
 const emailOf = u => `${String(u).trim().toLowerCase()}@${STAFF_DOMAIN}`;
 function openLogin(next) {
   if (!FB_READY) { toast("Primero configurá Firebase (ver README)."); return; }
-  modal(`<div class="box cut login-box" style="--tc:#8b3dff"><div class="bh"><div><img class="login-mark" src="assets/onyx-logo.png" alt="" width="52" height="52"><h3>Entrar a ONYX</h3><div class="muted" style="font-size:14px">Jugadores y coaches: con Discord o con su mail. Staff y capitanes: con su usuario.</div></div><button class="x" data-close aria-label="Cerrar">×</button></div>
+  modal(`<div class="box cut login-box" style="--tc:#8b3dff"><div class="bh"><div><img class="login-mark" src="assets/onyx-logo.png?v=11" alt="" width="52" height="52"><h3>Entrar a ONYX</h3><div class="muted" style="font-size:14px">Jugadores y coaches: con Discord o con su mail. Staff y capitanes: con su usuario.</div></div><button class="x" data-close aria-label="Cerrar">×</button></div>
     <div class="bb login-dc">${DC_BTN("Entrar con Discord")}<span class="login-or">o con tu mail o usuario</span></div>
     <form class="bb" id="loginForm" novalidate style="padding-top:0"><div class="ff"><label for="lgU">Mail o usuario</label><input id="lgU" autocomplete="username" autocapitalize="off" spellcheck="false"></div>
       <div class="ff"><label for="lgP">Contraseña</label><input id="lgP" type="password" autocomplete="current-password"></div>
@@ -2652,7 +2672,7 @@ async function botLoad() {
   catch (e) { B.err = e.message; }
   B.loading = false; if (S.adm.tab === "bot") renderAdminSoon();
 }
-const botAvatar = () => { const b = S.bot.status && S.bot.status.bot; return b && b.avatar ? `https://cdn.discordapp.com/avatars/${b.id}/${b.avatar}.png?size=96` : "icon-192.png"; };
+const botAvatar = () => "icon-192.png?v=11";
 const memAvatar = m => m.avatar ? `https://cdn.discordapp.com/avatars/${m.id}/${m.avatar}.png?size=64` : `https://cdn.discordapp.com/embed/avatars/${Number(BigInt(m.id) >> 22n) % 6}.png`;
 const roleHex = c => c ? "#" + Number(c).toString(16).padStart(6, "0") : "#99aab5";
 function botCh(id) { const c = ((S.bot.status || {}).channels || []).find(x => x.id === id); return c ? "#" + c.name : ""; }
@@ -3986,6 +4006,14 @@ function openResult(mid, mode) {
   else [m.a, m.b].forEach(k => roster(k).filter(p => p.role !== "Suplente").forEach(p => push(p.id, null)));
   RS = {mid, mode, img: null, rows, ra: base ? base.ra ?? "" : "", rb: base ? base.rb ?? "" : "", map: (base && base.map) || "", note: (own && own.note) || "", busy: false, ai: null, paste: false, left: null};
   renderResult(true);
+  if (mode==="cap" && m.leg==="desempate" && !own) {
+    const draft=RS;
+    api("/api/results",{action:"evidence",mid}).then(r=>{
+      if (r.image && RS===draft && !draft.img && !draft.busy && !draft.imageRequest && $("#modalRoot .rs-box")) {
+        rsSync(); draft.img=r.image; renderResult(); toast("Recuperamos la captura del desempate.");
+      }
+    }).catch(()=>{if (RS===draft) toast("No se pudo recuperar la captura. Podés volver a adjuntarla.");});
+  }
 }
 function renderResult(first) {
   const m = D.ms.find(x => x.id === RS.mid); if (!m) { closeModal(); return; }
@@ -4034,7 +4062,7 @@ function wireResult() {
     try {
       const image = await imageFromFile(f, 2160, false, true);
       if (draft !== RS || draft.imageRequest !== request || !box.isConnected) return;
-      rsSync(); RS.img = image; RS.ai = null; renderResult();
+      rsSync(); RS.img = image; RS.ocrBaseline=null; RS.ai = null; renderResult();
     } catch (er) { if (box.isConnected && draft.imageRequest === request) { toast(er.message); rsSync(); renderResult(); } }
   };
   file.addEventListener("change", () => { if (file.files[0]) take(file.files[0]); });
@@ -4085,9 +4113,15 @@ async function aiRead() {
     if (r.ra != null) RS.ra = r.ra; if (r.rb != null) RS.rb = r.rb; if (r.map && M.cfg.maps.some(x => x.n === r.map)) RS.map = r.map;
     RS.busy = false;
     fillRows((r.rows || []).map(x => ({name: x.name, k: x.k, d: x.d, a: x.a, acs: x.acs, side: x.side, pid: x.pid, score: x.score})));
+    RS.ocrBaseline = resultSignature(RS);
     if (!r.rows?.length) renderResult();
     if (!r.sidesSure) toast("Revisá que cada equipo haya quedado de su lado.");
   } catch (er) { if (draft !== RS || !$("#modalRoot .rs-box")) return; RS.busy = false; renderResult(); toast(er.message); }
+}
+function resultSignature(draft) {
+  const columns=["pid","side","k","d","a","acs"];
+  const values=draft.rows.map(row=>columns.map(key=>String(row[key]??""))).sort((a,b)=>JSON.stringify(a).localeCompare(JSON.stringify(b)));
+  return JSON.stringify([String(draft.ra),String(draft.rb),draft.map,values]);
 }
 function resErr(t) { const e = $("#rsErr"); if (e) { e.hidden = !t; e.textContent = t || ""; } }
 function resPayload() {
@@ -4116,13 +4150,13 @@ async function sendResult() {
   const go = $("#rsGo"); go.disabled = true; resErr("");
   try {
     if (RS.mode === "cap") {
-      const r = await api("/api/results", {action: "submit", mid: RS.mid, ra: P.ra, rb: P.rb, map: P.map, stats: P.stats, img: RS.img, note: RS.note});
+      const r = await api("/api/results", {action: "submit", mid: RS.mid, ra: P.ra, rb: P.rb, map: P.map, stats: P.stats, img: RS.img, note: RS.note, ocrEdited:RS.ocrBaseline ? RS.ocrBaseline!==resultSignature(RS) : null});
       closeModal(); RS = null;
       if (r.status === "auto") { toast("¡Coincidió con el otro capitán! El resultado ya está cargado."); confetti([TM(capTeam()).c, "#ffffff", "#8b3dff"]); }
       else toast(r.why ? `Enviado. ${r.why}` : "Enviado. Esperamos al otro capitán o al staff.");
     } else {
       const m = P.m, d = matchDoc(m.id); if (!d) throw new Error("El partido ya no existe.");
-      Object.assign(d, {status: "played", ra: P.ra, rb: P.rb, ot: P.ot, noShow: null, map: P.map, stats: P.stats});
+      Object.assign(d, {status: "played", publishedAt:d.publishedAt || Date.now(), publishedBy:d.publishedBy || "staff", ra: P.ra, rb: P.rb, ot: P.ot, noShow: null, map: P.map, stats: P.stats});
       await save(`matches/${m.id}`, d); await lockPickedMaps(m.id, d);
       for (const k of [m.a, m.b]) { const r = resOf(m.id, k); if (r && r.status === "pend") await save(`results/${m.id}_${k}`, {status: "ok", reviewedBy: S.staff.u, reviewedAt: Date.now()}, "update"); }
       audit(`Cargó el resultado de F${m.fecha}${m.leg ? " " + LEG_L[m.leg] : ""} ${TM(m.a).name} ${P.ra}-${P.rb} ${TM(m.b).name} con ${Object.keys(P.stats).length} jugadores (carga rápida)`);
@@ -4137,7 +4171,7 @@ function capResultsCard(k) {
   const due = pend.filter(m => m.fecha === nf || (parseLocal(m.date) && parseLocal(m.date).getTime() < now));
   const recent = D.played.filter(m => (m.a === k || m.b === k) && resOf(m.id, k) && m.fecha >= (D.lastF || 0) - 1);
   const list = [...due, ...recent].sort((a, b) => a.fecha - b.fecha || (a.legN || 0) - (b.legN || 0));
-  const ties = [];
+  const ties = [], provisional = [];
   const groups = new Map();
   D.ms.filter(m => m.a === k || m.b === k).forEach(m => {
     const key = JSON.stringify([m.fecha,[m.a,m.b].sort()]);
@@ -4145,6 +4179,7 @@ function capResultsCard(k) {
     groups.get(key).push(m);
   });
   for (const games of groups.values()) {
+    if (games.length===2 && games.some(m=>m.status!=="played") && games.some(m=>due.includes(m))) provisional.push(games[0]);
     if (games.length !== 2 || games.some(m => m.status !== "played" || +m.ra === +m.rb)) continue;
     if (new Set(games.map(m=>+m.ra>+m.rb?m.a:m.b)).size === 2) ties.push(games[0]);
   }
@@ -4155,7 +4190,7 @@ function capResultsCard(k) {
     return `<div class="req res-req" style="--st:var(--${st[1] === "ok" ? "win" : st[1] === "no" ? "loss" : "gold"})">${img(rival)}<div><div class="rq-t"><b>F${m.fecha}${m.leg ? " " + LEG_L[m.leg] : ""}</b> vs ${esc(TM(rival).name)}${r ? ` · <span class="mono">${r.ra}-${r.rb}</span>` : ""}</div>
       <div class="rq-m">${fmtDate(m.date)}${r && r.check && r.status === "pend" ? ` · ${esc(r.check)}` : ""}${r && r.status === "rej" && r.reviewNote ? ` · “${esc(r.reviewNote)}”` : ""}</div></div>
       <div class="rq-acts"><span class="st ${st[1]}">${st[0]}</span>${m.status !== "played" ? `<button class="btn sm ${r ? "ghost" : "gold"}" data-cap-act="res:${m.id}">${r ? "Corregir" : "Cargar resultado"}</button>` : ""}</div></div>`; };
-  return `<div class="adm-card" id="capResultsSection" tabindex="-1"><h3>${ico("i-check")} Resultados <small>subí la captura del marcador después de jugar</small></h3><div style="display:grid;gap:6px">${list.map(row).join("")}${ties.map(m=>`<button class="btn sm" data-tiebreak="${esc(m.id)}">Jugamos desempate · F${m.fecha} vs ${esc(TM(m.a===k?m.b:m.a).name)}</button>`).join("")}</div>
+  return `<div class="adm-card" id="capResultsSection" tabindex="-1"><h3>${ico("i-check")} Resultados <small>subí la captura del marcador después de jugar</small></h3><div style="display:grid;gap:6px">${list.map(row).join("")}${provisional.map(m=>`<label class="tie-file">¿Jugaron una tercera partida? · F${m.fecha} vs ${esc(TM(m.a===k?m.b:m.a).name)}<small>Guardá su captura mientras se revisan la ida y la vuelta.</small><input type="file" accept="image/png,image/jpeg,image/webp" data-stage="${esc(m.id)}"></label>`).join("")}${ties.map(m=>`<button class="btn sm" data-tiebreak="${esc(m.id)}">Jugamos desempate · F${m.fecha} vs ${esc(TM(m.a===k?m.b:m.a).name)}</button>`).join("")}</div>
     <p class="adm-note">${resCfgC().auto ? "Cuando los dos capitanes mandan el mismo resultado, se carga solo en la tabla. Si no coinciden, lo revisa el staff con las dos capturas." : "El staff revisa cada resultado con la captura antes de cargarlo."}</p></div>`;
 }
 
@@ -4181,7 +4216,16 @@ function admResultados(R, Dr) {
       ${fld("Lectura de capturas con IA", `<span class="chk"><input type="checkbox" ${C.ai ? "checked" : ""} data-bind="cfg:results.ai" data-t="b" ${U ? "" : "disabled"}>Activada</span>`)}
       ${fld("Lecturas por persona por día", `<input type="number" min="1" max="200" value="${C.aiDaily}" data-bind="cfg:results.aiDaily" data-t="n" ${U ? "" : "disabled"}>`)}</div>
     <p class="adm-note">Para que se carguen solos, los dos capitanes tienen que mandar el mismo marcador y las mismas estadísticas (el ACS puede variar 3 puntos), con al menos 4 jugadores por equipo. La lectura con IA usa Gemini de Google (gratis): necesita <span class="mono">GEMINI_API_KEY</span> en Netlify.${U ? "" : " Esto lo cambia ultra staff."}</p></div>`;
-  return quick + list + cfg;
+  const completed = Dr.ms.filter(m=>m.publishedAt && m.publishedBy);
+  const minutes = completed.map(m=>{
+    const starts=(byM[m.id]||[]).map(r=>r.firstAt || r.at).filter(at=>at>0 && at<=m.publishedAt);
+    return starts.length ? (m.publishedAt-Math.min(...starts))/60000 : null;
+  }).filter(x=>x!==null).sort((a,b)=>a-b);
+  const mid=Math.floor(minutes.length/2);
+  const median=minutes.length?(minutes.length%2?minutes[mid]:(minutes[mid-1]+minutes[mid])/2):null;
+  const ocr=all.filter(r=>typeof r.ocrEdited==="boolean");
+  const summary=`<div class="adm-card"><h3>Revisión de resultados</h3><div class="ops-grid"><div><b>${median===null?"—":Math.round(median)+" min"}</b><span>Mediana del primer envío a publicación</span></div><div><b>${completed.length?Math.round(100*completed.filter(m=>m.publishedBy==="staff").length/completed.length)+"%":"—"}</b><span>Partidos medidos que cerró el staff</span></div><div><b>${ocr.length?ocr.filter(r=>r.ocrEdited).length+" / "+ocr.length:"—"}</b><span>Envíos con lectura automática corregida</span></div></div></div>`;
+  return summary + list + quick + cfg;
 }
 async function resAdminAct(act, a, b) {
   if (act === "rs-open") { const mid = ($("#rsMatchSel") || {}).value || a[0]; if (mid) openResult(mid, "staff"); return true; }
@@ -4796,11 +4840,20 @@ function renderPartidos() {
       <span class="px-t r ${won === "b" ? "win" : won ? "lose" : ""}"><b>${esc(TM(g.b).name)}</b>${img(g.b)}</span>
       <small>${g.status === "played" ? `${g.map ? esc(g.map) + " · " : ""}${g.noShow ? "W.O." : g.ot ? "Prórroga" : "Final"}` : g.date ? fmtDate(g.date) : "A confirmar"}</small></button>`; }).join("")}</div>`;
   root.innerHTML = fs.map(f => { const gs = cruceGroups(list.filter(m => m.fecha === f)), anyP = D.played.some(m => m.fecha === f), d = list.find(m => m.fecha === f && m.date);
-    return `<section class="px-f"><header><h3>Fecha ${f}</h3><span class="muted">${d ? fmtDate(d.date, false) : ""}</span><span class="sp"></span>${isUltra() ? `<button class="btn sm ghost px-del" data-px-del="${f}">Borrar fecha</button>` : ""}${anyP ? `<button class="btn sm ghost" data-px-img="${f}">${ico("i-image")}<span>Imagen de la fecha</span></button>` : ""}</header><div class="px-list">${gs.map(card).join("")}</div></section>`; }).join("")
+    return `<section class="px-f"><header><h3>Fecha ${f}</h3><span class="muted">${d ? fmtDate(d.date, false) : ""}</span><span class="sp"></span>${isUltra() ? `<button class="btn sm ghost px-del" data-px-del="${f}">Borrar fecha</button>` : ""}${anyP ? `<button class="btn sm ghost" data-round-recap="${f}">Copiar resumen</button><button class="btn sm ghost" data-px-img="${f}">${ico("i-image")}<span>Imagen de la fecha</span></button>` : ""}</header><div class="px-list">${gs.map(card).join("")}</div></section>`; }).join("")
     || `<p class="empty">${matches.length ? "No hay partidos con esos filtros." : "Todavía no hay fixture."}</p>`;
 }
 $("#pxRoot") && $("#pxRoot").addEventListener("click", e => {
   const g = e.target.closest("[data-mid]"); if (g) { openMatch(g.dataset.mid); return; }
+  const recap=e.target.closest("[data-round-recap]");
+  if (recap) {
+    const f=+recap.dataset.roundRecap, round=D.ms.filter(m=>m.fecha===f);
+    const rows=byCruce(round).map(m=>TM(m.a).name+" "+(m.status==="played"?m.ra+"–"+m.rb:"vs")+" "+TM(m.b).name+" · "+legName(m)+(m.map?" · "+m.map:"")+(m.status!=="played"?" · pendiente":""));
+    const text=["ONYX League · Fecha "+f,...rows,new URL("#partidos",location.href).href].join("\n");
+    if (navigator.clipboard) navigator.clipboard.writeText(text).then(()=>toast("Resumen de la fecha copiado.")).catch(()=>window.prompt("Copiá el resumen",text));
+    else window.prompt("Copiá el resumen",text);
+    return;
+  }
   const im = e.target.closest("[data-px-img]"); if (im) shareImage("fecha", {f: +im.dataset.pxImg});
   const dl = e.target.closest("[data-px-del]"); if (dl) deleteFechas([+dl.dataset.pxDel]);
 });
@@ -4872,8 +4925,8 @@ async function shareImage(kind, o = {}) {
   const bg = cx.createLinearGradient(0, 0, 0, H); bg.addColorStop(0, "#0d0918"); bg.addColorStop(1, "#06050a"); cx.fillStyle = bg; cx.fillRect(0, 0, W, H);
   const glow = (x, y, r, c) => { const g = cx.createRadialGradient(x, y, 0, x, y, r); g.addColorStop(0, c); g.addColorStop(1, "rgba(0,0,0,0)"); cx.fillStyle = g; cx.fillRect(0, 0, W, H); };
   glow(W * .85, 0, 700, "rgba(139,61,255,.35)"); glow(0, H, 600, "rgba(106,31,240,.18)");
-  const logo = await loadImg("assets/onyx-logo.png");
-  if (logo) cx.drawImage(logo, 64, 58, 92, 92);
+  const logo = await loadImg("assets/onyx-logo.png?v=11");
+  if (logo) { const height=98*logo.naturalHeight/logo.naturalWidth; cx.drawImage(logo,64,104-height/2,98,height); }
   cx.fillStyle = "#fff"; cx.font = FONT(800, 44); cx.textBaseline = "middle"; cx.fillText("ONYX", 172, 92);
   cx.fillStyle = "#c8adff"; cx.font = FONT(500, 24); cx.fillText(M.cfg.season, 172, 128);
   const title = (t, sub) => { cx.fillStyle = "#fff"; cx.font = FONT(800, 76); cx.fillText(t, 64, 238); if (sub) { cx.fillStyle = "#a19cb4"; cx.font = FONT(500, 30); cx.fillText(sub, 64, 296); } };
@@ -4966,7 +5019,7 @@ const isCoachUser = () => !!(S.member && !S.staff && !S.captain && myCoachTeams(
 function openSignup(role = "player") {
   if (!FB_READY) { toast("Primero configurá Firebase (ver README)."); return; }
   const teamOpts = TEAM_KEYS.map(k => opt(k, TM(k).name, false)).join("");
-  modal(`<div class="box cut login-box su-box" style="--tc:#8b3dff"><div class="bh"><div><img class="login-mark" src="assets/onyx-logo.png" alt="" width="52" height="52"><h3>Crear cuenta</h3><div class="muted" style="font-size:14px">Para jugadores y coaches. Tu mail no se muestra en la página.</div></div><button class="x" data-close aria-label="Cerrar">×</button></div>
+  modal(`<div class="box cut login-box su-box" style="--tc:#8b3dff"><div class="bh"><div><img class="login-mark" src="assets/onyx-logo.png?v=11" alt="" width="52" height="52"><h3>Crear cuenta</h3><div class="muted" style="font-size:14px">Para jugadores y coaches. Tu mail no se muestra en la página.</div></div><button class="x" data-close aria-label="Cerrar">×</button></div>
     <form class="bb" id="suForm" novalidate>
       <div class="seg su-role" id="suRole"><button type="button" data-r="player" class="${role === "player" ? "on" : ""}">Soy jugador</button><button type="button" data-r="coach" class="${role === "coach" ? "on" : ""}">Soy coach</button></div>
       <div class="ff"><label for="suN">Nick</label><input id="suN" maxlength="32" autocomplete="nickname" spellcheck="false"></div>
@@ -5390,7 +5443,7 @@ document.addEventListener("click", async e => {
     return;
   }
   const mode = trigger.dataset.recruit, staff = mode === "staff", roles = mode === "roles";
-  modal(`<div class="box cut rec-box"><header class="bh"><div><div class="eyebrow">ONYX · Reclutamiento</div><h3>${roles?"Revisión de planteles":staff?"Encuestas y pagos":"Postulaciones"}</h3></div><button class="x" data-close aria-label="Cerrar">×</button></header><div class="bb" id="recBody" aria-live="polite">Cargando…</div></div>`);
+  modal(`<div class="box cut rec-box"><header class="bh"><div><div class="eyebrow">ONYX · Reclutamiento</div><h3>${roles?"Revisión de planteles":staff?"Solicitudes de jugadores":"Agentes libres"}</h3></div><button class="x" data-close aria-label="Cerrar">×</button></header><div class="bb" id="recBody" aria-live="polite">Cargando…</div></div>`);
   const body = $("#recBody");
   const detail = (label,value) => `<div><dt>${esc(label)}</dt><dd>${esc(value || "—")}</dd></div>`;
   try {
@@ -5405,7 +5458,7 @@ document.addEventListener("click", async e => {
       body.addEventListener("click",ev=>{
         const id = ev.target.closest("[data-review-player]")?.dataset.reviewPlayer;
         if (!id) return;
-        closeModal(); S.adm.pTeam = "all"; renderAdmin();
+        closeModal(); S.adm.tab="jugadores"; S.adm.pTeam = "all"; renderAdmin();
         const row = [...document.querySelectorAll("#adminRoot select[data-bind]")].find(el=>el.dataset.bind === "player:"+id+":team");
         if (row) { row.scrollIntoView({block:"center"}); row.focus(); }
       });
@@ -5419,7 +5472,30 @@ document.addEventListener("click", async e => {
       data = await response.json();
     }
     if (!body.isConnected) return;
-    body.innerHTML = data.rows.map(r=>`<article class="rec-card"><header><div><small>${esc(r.discord)} · ${esc(r.pais)}</small><h4>${esc(r.riot)}</h4></div><b>${esc(r.principal)}</b></header><dl>${detail("Rango actual",r.rango)}${detail("Peak elo",r.peak)}${detail("Rol secundario",r.secundario)}${detail("Abierto a otros roles",r.flex)}${detail("Agentes",r.agentes)}${detail("Disponibilidad",r.horarios)}${staff?detail("Por qué ficharlo",r.motivo)+detail("Se postula a capitán",r.capitan)+detail("Declara haber pagado US$ 2",r.pago)+detail("Dudas",r.dudas)+detail("Sugerencias",r.sugerencias):""}</dl>${staff?`<div class="rowbtns"><strong data-payment-status>${r.paid?"Pagado":"Pago pendiente"}</strong><button type="button" class="btn sm ghost" data-payment="${esc(r.id)}" data-paid="${!!r.paid}">${r.paid?"Marcar pendiente":"Confirmar pago"}</button></div>`:""}</article>`).join("") || "Todavía no hay postulaciones.";
+    const states = {pending:"Pendiente",approved:"Aprobada",rejected:"Rechazada"};
+    if (staff) data.rows.sort((a,b)=>Number((b.status||"pending")==="pending")-Number((a.status||"pending")==="pending") || b.updated-a.updated);
+    const cards = data.rows.map(r=>`<article class="rec-card" data-state="${esc(r.status || "pending")}"><header><div><small>${esc(r.discord)} · ${esc(r.pais)}</small><h4>${esc(r.riot)}</h4></div><b>${esc(r.principal)}</b></header><dl>${detail("Rango actual",r.rango)}${detail("Peak elo",r.peak)}${detail("Rol secundario",r.secundario)}${detail("Abierto a otros roles",r.flex)}${detail("Agentes",r.agentes)}${detail("Disponibilidad",r.horarios)}${staff?detail("Por qué ficharlo",r.motivo)+detail("Se postula a capitán",r.capitan)+detail("Declara haber pagado US$ 2",r.pago)+detail("Dudas",r.dudas)+detail("Sugerencias",r.sugerencias):""}</dl>${staff?`<p><b data-decision-status>${states[r.status] || "Pendiente"}</b> · ${r.source==="web"?"Web":"Discord"}</p>${!r.status || r.status==="pending"?`<div class="rowbtns"><button class="btn sm gold" data-decision="approve" data-id="${esc(r.id)}">Aprobar y publicar · 1.500</button><button class="btn sm ghost" data-decision="reject" data-id="${esc(r.id)}">Rechazar</button></div>`:""}<div class="rowbtns"><strong data-payment-status>${r.paid?"Pagado":"Pago pendiente"}</strong><button type="button" class="btn sm ghost" data-payment="${esc(r.id)}" data-paid="${!!r.paid}">${r.paid?"Marcar pendiente":"Confirmar pago"}</button></div>` :`<strong>Agente libre · ${fmt(r.value)} ONYX Coins</strong>`}</article>`).join("");
+    body.innerHTML = `<div class="rec-filters"><label>Buscar jugador<input type="search" id="recSearch" placeholder="Discord, Riot ID, rol o rango"></label>${staff?'<label>Estado<select id="recState"><option value="">Todos</option><option value="pending">Pendientes</option><option value="approved">Aprobadas</option><option value="rejected">Rechazadas</option></select></label>':'<a class="btn" href="postular.html">Postularme</a>'}</div>` + cards + '<p id="recEmpty" hidden>No hay fichas para esta búsqueda.</p>';
+    const filter = () => {
+      const q=$("#recSearch").value.trim().toLocaleLowerCase(), state=$("#recState")?.value || "";
+      let count=0;
+      body.querySelectorAll(".rec-card").forEach(card=>{card.hidden=!!((state && card.dataset.state!==state) || !card.textContent.toLocaleLowerCase().includes(q)); if (!card.hidden) count++;});
+      $("#recEmpty").hidden=!!count;
+    };
+    $("#recSearch").addEventListener("input",filter); $("#recState")?.addEventListener("change",filter); filter();
+    if (staff) body.addEventListener("click",async ev=>{
+      const btn=ev.target.closest("[data-decision]"); if (!btn || btn.disabled) return;
+      const bar=btn.parentElement, card=btn.closest(".rec-card"), approve=btn.dataset.decision==="approve";
+      if (!approve && !window.confirm("¿Rechazar la solicitud de "+card.querySelector("h4").textContent+"?")) return;
+      bar.querySelectorAll("button").forEach(b=>b.disabled=true);
+      try {
+        await api("/api/recruitment",{action:btn.dataset.decision,id:btn.dataset.id});
+        applicationsCount.at=0; showApplicationsCount();
+        card.dataset.state=approve?"approved":"rejected";
+        card.querySelector("[data-decision-status]").textContent=states[card.dataset.state]; bar.remove(); filter();
+        toast(approve?"Jugador publicado en el mercado por 1.500 ONYX Coins.":"Solicitud rechazada.");
+      } catch(err) {toast(err.message);bar.querySelectorAll("button").forEach(b=>b.disabled=false);}
+    });
     if (staff) body.addEventListener("click",async ev=>{
       const btn = ev.target.closest("[data-payment]"); if (!btn || btn.disabled) return;
       btn.disabled = true;
@@ -5431,6 +5507,25 @@ document.addEventListener("click", async e => {
       } catch (err) { toast(err.message); } finally { btn.disabled = false; }
     });
   } catch (err) { if (body.isConnected) body.textContent = err.message; }
+});
+document.addEventListener("click",async e=>{
+  const free=e.target.closest("[data-free-player]");
+  if (free) { openPlayer(free.dataset.freePlayer); return; }
+  if (!e.target.closest("[data-share-application]")) return;
+  const url=new URL("postular.html",location.href).href;
+  try {await navigator.clipboard.writeText(url);toast("Enlace de inscripción copiado.");}
+  catch {window.prompt("Copiá el enlace de inscripción",url);}
+});
+document.addEventListener("change",async e=>{
+  const input=e.target.closest("[data-stage]");
+  if (!input?.files?.[0]) return;
+  input.disabled=true;
+  try {
+    const img=await imageFromFile(input.files[0],2160,false,true);
+    await api("/api/results",{action:"stage",mid:input.dataset.stage,img});
+    toast("Captura del desempate guardada. Podés recuperarla al cargar el tercer partido.");
+  } catch(err){toast(err.message);}
+  finally{input.disabled=false;input.value="";}
 });
 /* ================= arranque ================= */
 buildOrbit();

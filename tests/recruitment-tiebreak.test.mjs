@@ -6,7 +6,7 @@ import {survey} from "../netlify/lib/recruitment.mjs";
 import endpoint,{rosterReview} from "../netlify/functions/recruitment.mjs";
 import resultEndpoint from "../netlify/functions/results.mjs";
 import {fields} from "../netlify/lib/survey-fields.mjs";
-import {createTiebreak} from "../netlify/lib/tiebreak.mjs";
+import {createTiebreak,stageEvidence} from "../netlify/lib/tiebreak.mjs";
 import {cleanRead,matchRows} from "../netlify/lib/scoreboard.mjs";
 
 test("encuesta en canal autorizado, ficha pública, pago privado y reenvío", async()=>{
@@ -28,6 +28,14 @@ test("encuesta en canal autorizado, ficha pública, pago privado y reenvío", as
   await survey(i);
   const privateRow = db._get("recruits/"+id);
   assert.equal(privateRow.paid,true);
+  assert.deepEqual((await (await endpoint(new Request("https://example.test/api/recruitment"))).json()).rows,[]);
+  assert.equal((await endpoint(request({action:"approve",id},"guest"))).status,403);
+  const approved=await endpoint(request({action:"approve",id},"admin"));
+  assert.equal(approved.status,200);
+  const {pid}=await approved.json();
+  assert.equal(db._get("players/"+pid).value,1500);
+  assert.equal(db._get("players/"+pid).team,null);
+  assert.equal(db._get("players/"+pid).discord,id);
   const publicData = await (await endpoint(new Request("https://example.test/api/recruitment"))).json();
   assert.equal(publicData.rows.length,1);
   assert.equal(publicData.rows[0].riot,"Zeta#SUR");
@@ -38,6 +46,7 @@ test("sugiere equipos por identidad vinculada, sin mover jugadores con roles amb
   const member={roles:["r1"],user:{id:"8",username:"uno"}};
   const doc=(id,data)=>({id,data:()=>data});
   const players=[doc("a",{name:"Uno",team:"orion"})],links=[doc("d_8",{pid:"a"})],teams={onyx:{role:"r1"},orion:{role:"r2"}};
+  assert.match(rosterReview([{...member,roles:[]}],players,links,teams)[0].issue,/Sin rol/);
   assert.deepEqual(rosterReview([member],players,links,teams)[0].roles,["onyx"]);
   assert.match(rosterReview([{...member,roles:["r1","r2"]}],players,links,teams)[0].issue,/varios/);
   assert.equal(rosterReview([{...member,roles:["r2"]}],players,links,teams).length,0);
@@ -81,3 +90,58 @@ test("OCR conserva celdas ilegibles y distingue homónimos por tag",()=>{
   assert.equal(matchRows([{name:"Nova"}],p)[0].pid,null);
 });
 
+
+test("solicitud web, revisión privada y reintento sin alterar a un jugador fichado",async()=>{
+  admin.initializeApp();
+  const db=globalThis.__db=fakeDb({"staff/admin":{u:"admin",role:"staff"}});
+  const req=(body,token)=>new Request("https://example.test/api/recruitment",{method:"POST",headers:token?{authorization:"Bearer "+token}:{},body:JSON.stringify(body)});
+  const answers=Object.fromEntries(fields.map(([key])=>[key,"Sí"]));
+  Object.assign(answers,{riot:"Prueba#AR1",principal:"Centinela",discord:"jugador",rango:"Platino 2",motivo:"Privado"});
+  const apply=()=>endpoint(req({action:"apply",answers}));
+  assert.equal((await apply()).status,201);
+  assert.equal((await apply()).status,409);
+  const [id]=Object.keys(db._coll("recruits"));
+  assert.equal(db._get("recruits/"+id).status,"pending");
+  assert.deepEqual(db._coll("players"),{});
+  const approve=()=>endpoint(req({action:"approve",id},"admin"));
+  const approved=await approve();
+  assert.equal(approved.status,200);
+  const {pid}=await approved.json(), player=db._get("players/"+pid);
+  assert.equal(player.value,1500); assert.equal(player.team,null); assert.equal(player.role,"Centinela");
+  assert.equal(player.discord,undefined); assert.equal(player.recruitment.discord,"jugador");
+  assert.equal(db._get("public/snapshot").json.includes("Privado"),false);
+  assert.equal((await endpoint(req({action:"payment",id,paid:true},"admin"))).status,200);
+  assert.equal(db._get("recruits/"+id).paid,true);
+  await db.doc("players/"+pid).update({team:"orion",value:2500});
+  assert.equal((await approve()).status,200);
+  assert.equal(db._get("players/"+pid).value,2500);
+  assert.equal(db._get("players/"+pid).team,"orion");
+  assert.deepEqual((await (await endpoint(new Request("https://example.test/api/recruitment"))).json()).rows,[]);
+});
+
+test("un rechazo, un duplicado existente y una encuesta incompleta nunca crean jugadores",async()=>{
+  admin.initializeApp();
+  const db=globalThis.__db=fakeDb({"staff/admin":{u:"admin",role:"staff"},"players/a":{name:"Existente",ign:"Hielo#SUR",team:"onyx",value:3000}});
+  const send=(body)=>endpoint(new Request("https://example.test/api/recruitment",{method:"POST",headers:{authorization:"Bearer admin"},body:JSON.stringify(body)}));
+  assert.equal((await send({action:"apply",answers:{riot:"Hielo#SUR"}})).status,400);
+  const id="123456789012345678";
+  await db.doc("recruits/"+id).set({riot:"hielo#sur",discord:"nuevo",updated:1});
+  assert.equal((await send({action:"approve",id})).status,409);
+  assert.equal((await send({action:"reject",id})).status,200);
+  assert.equal((await send({action:"approve",id})).status,409);
+  assert.equal(db._get("recruits/"+id).status,"rejected");
+  assert.deepEqual(Object.keys(db._coll("players")),["a"]);
+});
+
+test("una captura anticipada permanece privada y se recupera con el ID del desempate confirmado",async()=>{
+  const first={a:"onyx",b:"orion",fecha:2,status:"pending"};
+  const db=fakeDb({"matches/a":first,"matches/b":first}),cap={captain:true,team:"onyx",uid:"cap"};
+  await assert.rejects(stageEvidence(db,db.doc("matches/a"),{...cap,team:"nexus"},"prueba"),{status:403});
+  const id=await stageEvidence(db,db.doc("matches/a"),cap,"captura");
+  assert.equal(db._get("matches/"+id),undefined);
+  await db.doc("matches/a").update({status:"played",ra:13,rb:7});
+  await db.doc("matches/b").update({status:"played",ra:8,rb:13});
+  assert.equal(await createTiebreak(db,db.doc("matches/b"),cap),id);
+  assert.equal(db._get("resultimg/"+id+"_onyx").data,"captura");
+  assert.equal(db._get("resultimg/"+id+"_orion"),undefined);
+});

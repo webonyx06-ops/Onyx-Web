@@ -11,14 +11,14 @@
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="ONYX">
 <meta property="og:url" content="https://onyxt1.netlify.app/">
-<meta property="og:image" content="https://onyxt1.netlify.app/og.png">
+<meta property="og:image" content="https://onyxt1.netlify.app/og.png?v=11">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
 <meta name="twitter:card" content="summary_large_image">
 <link rel="canonical" href="https://onyxt1.netlify.app/">
-<link rel="icon" href="favicon.ico" sizes="any">
-<link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
-<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" href="favicon.ico?v=11" sizes="any">
+<link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png?v=11">
+<link rel="apple-touch-icon" href="apple-touch-icon.png?v=11">
 <link rel="manifest" href="site.webmanifest">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -81,7 +81,7 @@
 <div class="app">
   <aside class="sidebar" id="side" aria-label="Menú principal">
     <div class="side-top">
-      <a class="brand" href="#inicio" aria-label="ONYX, ir al inicio"><img class="brand-mark" src="assets/onyx-logo.png" alt="" width="40" height="40"><span class="brand-txt"><b>ONYX</b><small id="brandSeason">Liga de Valorant</small></span></a>
+      <a class="brand" href="#inicio" aria-label="ONYX, ir al inicio"><img class="brand-mark" src="assets/onyx-logo.png?v=11" alt="" width="40" height="40"><span class="brand-txt"><b>ONYX</b><small id="brandSeason">Liga de Valorant</small></span></a>
       <button class="side-rail" id="sideRail" type="button" aria-label="Achicar el menú" title="Achicar el menú"><svg class="ic"><use href="#i-rail"/></svg></button>
       <button class="side-x" id="sideClose" type="button" aria-label="Cerrar el menú"><svg class="ic"><use href="#i-close"/></svg></button>
     </div>
@@ -103,6 +103,7 @@
 </div>
 <div class="ngrp"><span class="ngrp-t">Planteles y fichajes</span>
         <a href="#equipos" data-v="equipos" aria-label="Equipos"><svg class="ic"><use href="#i-shield"/></svg><span>Equipos</span></a>
+        <a href="postular.html" aria-label="Postularme como jugador"><svg class="ic"><use href="#i-user"/></svg><span>Postularme como jugador</span></a>
         <a href="#scouting" data-v="scouting" aria-label="Explorar jugadores"><svg class="ic"><use href="#i-scope"/></svg><span>Explorar jugadores</span></a>
         <a href="#mercado" data-v="mercado" aria-label="Mercado" id="navMk" hidden><svg class="ic"><use href="#i-coins"/></svg><span>Mercado</span></a>
         <a href="#seguimiento" data-v="seguimiento" aria-label="Seguimiento" id="navSeg" hidden><svg class="ic"><use href="#i-pulse"/></svg><span>Seguimiento</span></a>
@@ -143,7 +144,7 @@
   <div class="main-col">
     <header class="mbar">
       <button class="mbar-btn" id="sideOpen" type="button" aria-label="Abrir el menú"><svg class="ic"><use href="#i-menu"/></svg></button>
-      <a class="brand" href="#inicio" aria-label="ONYX, ir al inicio"><img class="brand-mark" src="assets/onyx-logo.png" alt="" width="32" height="32"><span class="brand-txt"><b>ONYX</b></span></a>
+      <a class="brand" href="#inicio" aria-label="ONYX, ir al inicio"><img class="brand-mark" src="assets/onyx-logo.png?v=11" alt="" width="32" height="32"><span class="brand-txt"><b>ONYX</b></span></a>
       <span class="mbar-title" id="mbarTitle"></span>
       <a class="mbar-btn dc" id="mbarDc" href="#" target="_blank" rel="noopener" hidden aria-label="Discord de ONYX"><svg class="ic"><use href="#i-chat"/></svg></a>
       <button class="mbar-btn" id="cmdOpen2" type="button" aria-label="Buscar"><svg class="ic"><use href="#i-search"/></svg></button>
@@ -161,7 +162,7 @@
             <p class="lede">El calendario, los planteles y los resultados de la liga comunitaria de VALORANT.</p>
             <div class="cta">
               <a class="btn gold" href="#partidos"><svg class="ic"><use href="#i-calendar"/></svg>Ver partidos</a>
-              <a class="btn" href="#tabla"><svg class="ic"><use href="#i-table"/></svg>Posiciones</a>
+              <a class="btn apply-cta" href="postular.html">Postularme como jugador <span aria-hidden="true">↗</span></a>
               <button class="btn" id="heroCap" type="button" hidden><svg class="ic"><use href="#i-crown"/></svg>Panel de capitán</button>
               <a class="btn" href="#elegir-mapa" id="heroMp" hidden><svg class="ic"><use href="#i-flag"/></svg><span id="heroMpTxt">Elegí tu mapa</span></a>
               <a class="btn" href="#perfil" id="heroAtt" hidden><svg class="ic"><use href="#i-check"/></svg><span id="heroAttTxt">Confirmá si jugás</span></a>
@@ -172,7 +173,7 @@
           </div>
           <div class="orbit-wrap" id="orbitWrap">
             <div class="orbit" id="orbit"><div class="ring"></div><div class="ring r2"></div></div>
-            <div class="orbit-core"><img class="core-mark" src="assets/onyx-logo.png" alt="Logo de ONYX"><span id="coreFecha">Fecha 1</span></div>
+            <div class="orbit-core"><img class="core-mark" src="assets/onyx-logo.png?v=11" alt="Logo de ONYX"><span id="coreFecha">Fecha 1</span></div>
           </div>
         </div>
 
@@ -373,13 +374,13 @@
   <!-- MERCADO -->
   <section class="sec view" id="mercado" data-title="Mercado">
     <div class="sec-head">
-      <div><div class="crumb"><svg class="ic"><use href="#i-coins"/></svg><span>Capitanes</span></div><h2>ONYX Coins</h2>
+      <div><div class="crumb"><svg class="ic"><use href="#i-coins"/></svg><span>Capitanes</span></div><h2>Mercado de fichajes</h2>
         <p>Cada equipo tiene un presupuesto en ONYX Coins. Solo los capitanes pueden fichar: ofertan con su cuenta y el staff aprueba cada pase. Los jugadores con cláusula de rescisión se van si alguien la paga.</p></div>
     </div>
-    <div class="panel pad cut recruit-intro"><h3>Jugadores en búsqueda de equipo</h3><button class="btn" type="button" data-recruit="public">Ver postulaciones</button></div>
+    <div class="panel pad cut recruit-intro"><h3>Agentes libres</h3><div class="rowbtns"><a class="btn gold" href="postular.html">Postularme</a><button class="btn" type="button" data-recruit="public">Ver todas las fichas</button></div><div id="freePreview" class="free-preview"></div></div>
     <div class="mk-lock cut" id="mkLock">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
-      <div><b>El mercado es solo para capitanes</b><span>Los capitanes ven los jugadores, sus valores y cláusulas, y ofertan desde acá. Si sos capitán, entrá con tu cuenta.</span></div>
+      <div><b>Ingresá para hacer ofertas</b><span>Los capitanes ven los jugadores, sus valores y cláusulas, y ofertan desde acá. Si sos capitán, entrá con tu cuenta.</span></div>
       <button class="btn gold sm" id="mkLogin" type="button">Entrar como capitán</button>
     </div>
     <div id="mkBody" hidden>
@@ -421,7 +422,7 @@
       <div><div class="crumb"><svg class="ic"><use href="#i-shield"/></svg><span>Jugadores</span></div><h2>Equipos y roles</h2>
         <p>Cada equipo tiene capitán, subcapitán y roles definidos. Elegí un equipo para ver su plantel.</p></div>
     </div>
-    <div class="rowbtns recruit-intro"><button class="btn sm" data-recruit="public" type="button">Ver jugadores postulados</button></div>
+    <div class="rowbtns recruit-intro"><button class="btn sm" data-recruit="public" type="button">Ver fichas aprobadas</button></div>
       <div class="teams" id="teams"></div>
     <div class="grid-2" style="margin-top:18px">
       <div class="panel pad cut" id="teamDetail"></div>
@@ -584,7 +585,7 @@
     <div class="ideas" id="ideaList"></div>
   </section>
     </main>
-    <footer id="footer"><div class="ft-top"><img src="assets/onyx-logo.png" alt="" width="22" height="22"><span id="footTxt">ONYX · Liga de Valorant</span><span class="sp"></span><a class="ft-dc" id="footDc" href="#" target="_blank" rel="noopener" hidden><svg class="ic"><use href="#i-chat"/></svg>Discord</a><a href="#reglamento">Reglamento</a></div>
+    <footer id="footer"><div class="ft-top"><img src="assets/onyx-logo.png?v=11" alt="" width="22" height="22"><span id="footTxt">ONYX · Liga de Valorant</span><span class="sp"></span><a class="ft-dc" id="footDc" href="#" target="_blank" rel="noopener" hidden><svg class="ic"><use href="#i-chat"/></svg>Discord</a><a href="#reglamento">Reglamento</a></div>
       <p class="ft-legal">ONYX es una competencia comunitaria y no es una competencia oficial de Riot Games. ONYX fue creado bajo la política “Legal Jibber Jabber” de Riot Games usando recursos propiedad de Riot Games. Riot Games no respalda ni patrocina este proyecto.</p></footer>
   </div>
 </div>

@@ -16,7 +16,7 @@ function fakeStore() {
   };
 }
 
-test("copia todo menos capturas y el resumen; restaura sin tocar cuentas ni auditoría", async () => {
+test("copia las capturas y omite el resumen; restaura sin tocar cuentas ni auditoría", async () => {
   const db = fakeDb({
     "matches/m1": { fecha: 1, status: "played", ra: 13, rb: 2 }, "players/p1": { name: "Jagger" },
     "staff/u1": { u: "ultra1", role: "ultra" }, "audit/a1": { txt: "x" }, "resultimg/m1_onyx": { data: "data:..." },
@@ -24,20 +24,22 @@ test("copia todo menos capturas y el resumen; restaura sin tocar cuentas ni audi
   });
   const store = fakeStore();
   const d = await dumpAll(db, 1700000000000);
-  assert.ok(!d.colls.resultimg && !("snapshot" in (d.colls.public || {})), "sin capturas ni resumen");
+  assert.ok(d.colls.resultimg.m1_onyx && !("snapshot" in (d.colls.public || {})), "con captura y sin resumen");
   assert.ok(d.colls.public.pickagg, "los contadores sí");
-  assert.equal(countDocs(d), 6);
+  assert.equal(countDocs(d), 7);
   const r = await saveBackup(d, { kind: "manual", reason: "prueba", by: "ultra1", store });
   assert.match(r.key, /^manual\/2023-11-14T22-13-20Z$/);
   const list = await listBackups(store);
-  assert.equal(list[0].reason, "prueba"); assert.equal(list[0].docs, 6);
+  assert.equal(list[0].reason, "prueba"); assert.equal(list[0].docs, 7);
   // se rompe todo
   await db.doc("matches/m1").delete(); await db.doc("matches/m9").set({ basura: true });
   await db.doc("players/p1").update({ name: "Roto" }); await db.doc("staff/u1").update({ role: "staff" });
+  await db.doc("resultimg/m1_onyx").delete();
   const done = await restoreAll(db, JSON.parse(await readBackup(r.key, store)));
   assert.equal(db._get("matches/m1").ra, 13); assert.equal(db._get("matches/m9"), undefined, "borra lo que no estaba");
   assert.equal(db._get("players/p1").name, "Jagger");
   assert.equal(db._get("staff/u1").role, "staff", "las cuentas no se pisan");
+  assert.equal(db._get("resultimg/m1_onyx").data,"data:...");
   assert.ok(done.matches && !done.staff && !done.audit);
   await assert.rejects(readBackup("../../etc/passwd", store), /no existe/);
   await assert.rejects(restoreAll(db, { colls: {} }), /no es una copia/);

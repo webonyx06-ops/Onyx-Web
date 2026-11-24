@@ -1,6 +1,7 @@
 import { env, hasPerm, PERM, api, sendMessage } from "./discord.mjs";
 import { initAdmin } from "./admin.mjs";
 
+import { readAnswers, submitApplication } from "./applications.mjs";
 import { fields } from "./survey-fields.mjs";
 export async function survey(i) {
   const quiet = content => ({content,flags:64,allowed_mentions:{parse:[]}});
@@ -16,7 +17,7 @@ export async function survey(i) {
         || await api("POST","/guilds/"+i.guild_id+"/channels",{name:"postulaciones-onyx",type:0,topic:"Encuestas de fichajes ONYX · Completá /postular"});
       channel = target.id;
     }
-    const message = {content:"**Postulaciones ONYX**\nUsá **/postular** en este canal y completá la encuesta. Tu usuario de Discord se toma de tu cuenta. En la web se muestran tu Riot ID, rangos, roles, agentes, disponibilidad y país. El staff recibe el resto y verifica el pago por separado. Podés actualizar tu ficha repitiendo el comando.\n\n"+fields.map(([,label])=>"• "+label).join("\n"),allowed_mentions:{parse:[]}};
+    const message = {content:"**Postulaciones ONYX**\nUsá **/postular** en este canal y completá la encuesta. Tu usuario de Discord se toma de tu cuenta. En la web se muestran tu Riot ID, rangos, roles, agentes, disponibilidad y país. El staff recibe el resto y verifica el pago por separado. El staff revisa tu postulación. Al aprobarla, entrás al mercado libre por 1.500 ONYX Coins.\n\n"+fields.map(([,label])=>"• "+label).join("\n"),allowed_mentions:{parse:[]}};
     if (channel !== i.channel_id) await sendMessage(channel,message);
     await config.set({channel});
     return channel === i.channel_id ? message : quiet("Encuesta publicada en <#"+channel+">.");
@@ -25,7 +26,8 @@ export async function survey(i) {
   const options = Object.fromEntries((i.data.options || []).map(o=>[o.name,String(o.value).trim()]));
   if (!/^[^#\r\n]+#[^#\s]+$/.test(options.riot || "")) return quiet("Revisá tu Riot ID e incluí el #tag.");
   const record = Object.fromEntries(fields.map(([key])=>[key,(options[key] || "").slice(0,key==="motivo"?600:220)]));
-  await db.doc("recruits/"+i.member.user.id).set({...record,discord:i.member.user.username,updated:Date.now()},{merge:true});
-  return quiet("Tu ficha se publicó en ONYX. Tus respuestas privadas quedaron para el staff.");
+  try { await submitApplication(db,readAnswers({...record,discord:i.member.user.username}),i.member.user.id); }
+  catch (err) { if (err.status) return quiet(err.message); throw err; }
+  return quiet("Tu solicitud está pendiente de revisión por el staff. Al aprobarla entrás al mercado como agente libre.");
 }
 

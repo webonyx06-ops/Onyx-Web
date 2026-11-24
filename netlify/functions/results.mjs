@@ -2,7 +2,7 @@
 //   { action: "read", mid, image }   → lee la captura con IA y propone marcador, mapa y estadísticas (capitanes del partido y staff)
 //   { action: "submit", mid, ra, rb, map, stats, img?, note? } → el capitán manda su resultado; si coincide con el del rival, se carga solo
 //   { action: "check", mid }         → staff: vuelve a comparar los dos envíos
-import { createTiebreak } from "../lib/tiebreak.mjs";
+import { createTiebreak, stageEvidence } from "../lib/tiebreak.mjs";
 import { initAdmin } from "../lib/admin.mjs";
 import { json, whoIs, readBody } from "../lib/auth.mjs";
 import { readScoreboard, mapToMatch, aiConfigured, AiError, parseDataUrl } from "../lib/scoreboard.mjs";
@@ -37,6 +37,17 @@ export default async (req) => {
     if (!who.staff && team !== m.a && team !== m.b) return json(403, { error: "Ese partido no es de tu equipo." });
     const cfgS = await db.doc("league/config").get(), cfg = cfgS.exists ? cfgS.data() : {}, R = resCfg(cfg);
 
+    if (b.action === "stage") {
+      if (typeof b.img!=="string" || b.img.length>950000) return json(400,{error:"Usá una captura de menor tamaño."});
+      parseDataUrl(b.img);
+      await stageEvidence(db,ms.ref,who,b.img);
+      return json(200,{ok:true});
+    }
+    if (b.action === "evidence") {
+      if (!who.captain || m.leg!=="desempate") return json(403,{error:"Solo capitanes del desempate."});
+      const evidence=(await db.doc("resultimg/"+mid+"_"+team).get()).data();
+      return json(200,{image:evidence?.staged ? evidence.data : null});
+    }
     if (b.action === "tiebreak") {
       const id = await createTiebreak(db,ms.ref,who);
       clearSnapshotCache();
@@ -69,12 +80,12 @@ export default async (req) => {
       }
       await db.runTransaction(async tx => {
       const ref = db.doc(`results/${mid}_${team}`);
-      const [prev,live] = await Promise.all([tx.get(ref),tx.get(ms.ref)]);
+      const [prev,live,staged] = await Promise.all([tx.get(ref),tx.get(ms.ref),m.leg==="desempate" && !hasImg ? tx.get(db.doc(`resultimg/${mid}_${team}`)) : null]);
       const match = live.data();
       if (!match || match.status === "played" || match.a !== m.a || match.b !== m.b) throw Object.assign(new Error("El partido cambió. Volvé a abrirlo."),{status:409});
       if (prev.exists && ["auto", "ok"].includes(prev.data().status)) throw Object.assign(new Error("Tu resultado ya fue aprobado."),{status:409});
       if (hasImg) tx.set(db.doc(`resultimg/${mid}_${team}`),{data:b.img,at:now,by:who.u});
-      tx.set(ref,{ mid, team, fecha: +m.fecha || 1, ...clean, by: who.uid, u: who.u, at: now, status: "pend", hasImg: hasImg || !!(prev.exists && prev.data().hasImg), check: "" });
+      tx.set(ref,{ mid, team, fecha: +m.fecha || 1, ...clean, by: who.uid, u: who.u, firstAt:prev.data()?.firstAt || prev.data()?.at || now, at: now, ocrEdited:typeof b.ocrEdited==="boolean"?b.ocrEdited:null, status: "pend", hasImg: hasImg || !!staged?.data()?.staged || !!(prev.exists && prev.data().hasImg), check: "" });
       });
       const label = (k) => String(k).toUpperCase();
       const r = await tryAuto(db, mid, { cfg, now, audit: (mm, x) => ({ at: now, uid: "servidor", u: "servidor", role: "auto", txt: `Resultado cargado solo (los dos capitanes coincidieron): F${mm.fecha} ${label(mm.a)} ${x.ra}-${x.rb} ${label(mm.b)}${x.map ? " · " + x.map : ""}` }) });
@@ -84,7 +95,7 @@ export default async (req) => {
 
     if (b.action === "check") {
       if (!who.staff) return json(403, { error: "Solo staff." });
-      const r = await tryAuto(db, mid, { cfg: { ...cfg, results: { ...R, auto: true } }, now, audit: (mm, x) => ({ at: now, uid: who.uid, u: who.u, role: who.role, txt: `Aprobó el resultado que mandaron los dos capitanes: F${mm.fecha} ${String(mm.a).toUpperCase()} ${x.ra}-${x.rb} ${String(mm.b).toUpperCase()}` }) });
+      const r = await tryAuto(db, mid, { manualCheck:true, cfg: { ...cfg, results: { ...R, auto: true } }, now, audit: (mm, x) => ({ at: now, uid: who.uid, u: who.u, role: who.role, txt: `Aprobó el resultado que mandaron los dos capitanes: F${mm.fecha} ${String(mm.a).toUpperCase()} ${x.ra}-${x.rb} ${String(mm.b).toUpperCase()}` }) });
       if (r.applied) { const p = await patchSnapshot(db, [`matches/${mid}`]); await afterPatch(db, p).catch(() => {}); }
       return json(200, { applied: !!r.applied, why: r.why || "" });
     }

@@ -55,7 +55,7 @@ export function enoughStats(merged, m) {
 export const matchPatch = (merged) => ({ status: "played", ra: merged.ra, rb: merged.rb, ot: !!merged.ot, noShow: null, map: merged.map || null, stats: merged.stats });
 
 // Intenta cargar el partido solo. db: admin. Devuelve { applied, why }
-export async function tryAuto(db, mid, { cfg, now = Date.now(), audit = null } = {}) {
+export async function tryAuto(db, mid, { cfg, now = Date.now(), audit = null, manualCheck = false } = {}) {
   const R = resCfg(cfg);
   const mref = db.doc(`matches/${mid}`);
   return db.runTransaction(async (tx) => {
@@ -69,7 +69,7 @@ export async function tryAuto(db, mid, { cfg, now = Date.now(), audit = null } =
     if (m.status === "played") return { applied: false, why: "El staff ya cargó este partido." };
     if (!R.auto) return { applied: false, why: "Los dos coinciden. La carga automática está apagada: lo aprueba el staff." };
     if (!enoughStats(g.merged, m)) return { applied: false, why: "Los dos coinciden, pero faltan estadísticas (mínimo 4 jugadores por equipo): lo revisa el staff." };
-    tx.update(mref, matchPatch(g.merged));
+    tx.update(mref, {...matchPatch(g.merged),publishedAt:now,publishedBy:manualCheck?"staff":"auto"});
     for (const id of ids) tx.update(db.doc(`results/${id}`), { status: "auto", appliedAt: now, check: "" });
     if (audit) tx.set(db.collection("audit").doc(), audit(m, g.merged));
     return { applied: true, merged: g.merged, m };
