@@ -150,3 +150,28 @@ test("dos confirmaciones compiten por un mismo jugador con una transacción por 
   assert.equal(result.filter(r=>r.status==="fulfilled").length,1);assert.equal(Object.keys(db._coll("transfers")).length,1);
   assert.equal(db._get("teams/onyx").coins,4500);assert.equal(db._get("teams/orion"),undefined);
 });
+test("el anuncio del fichaje llega aunque falle editar el aviso anterior; al reintentar solo se corrige ese aviso",async()=>{
+  const db=setup(),d=discord();d.state.joined=true;
+  await db.doc("marketposts/"+pid).set({message:"original",version:0});
+  await db.runTransaction(tx=>queue(tx,db,"confirmed","transfer",{pid,rid:id,version:1,from:null,to:"onyx",name:"Test"}));
+  let blocked=true;
+  const call=async(m,path,body)=>{
+    if(path.includes("/members/"))throw Object.assign(new Error("Sin acceso al miembro"),{status:403});
+    if(m==="PATCH" && blocked)throw Object.assign(new Error("Falta acceso al aviso anterior"),{status:403});
+    return d.call(m,path,body);
+  };
+  await work(db,"confirmed",{call});
+  assert.equal(d.sent.length,1);assert.equal(d.sent[0].channel,transferChannel);
+  assert.equal(d.sent[0].embeds[0].fields[0].value,"Test");
+  assert.equal(db._get("communityjobs/confirmed").message,d.sent[0].id);
+  assert.equal(db._get("communityjobs/confirmed").state,"retry");
+  blocked=false;await work(db,"confirmed",{manual:true,call});
+  assert.equal(d.sent.length,1);assert.equal(d.edits.length,1);assert.equal(db._get("communityjobs/confirmed").state,"done");
+});
+test("la sincronización de roles no demora el anuncio de un jugador libre",async()=>{
+  const db=setup(),d=discord();
+  await db.doc("communitylocks/role_"+pid).set({until:Date.now()+180000,token:"roles"});
+  await db.runTransaction(tx=>queue(tx,db,"freeNew","free",{pid,rid:id,version:0}));
+  await work(db,"freeNew",{call:d.call});
+  assert.equal(d.sent.length,1);assert.equal(d.sent[0].channel,freeChannel);
+});

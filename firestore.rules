@@ -174,7 +174,7 @@ service cloud.firestore {
     }
     match /redeems/{id} {
       allow read: if true;
-      allow create: if isStaff() || (isCaptain() && validRedeem());
+      allow create: if isStaff() || (isCaptain() && validRedeem() && ('coach' in request.resource.data || request.resource.data.method == 'usd'));
       allow update: if isStaff();
       allow delete: if isUltra() || (isCaptain() && resource.data.by == request.auth.uid && resource.data.status == 'pend');
     }
