@@ -51,7 +51,8 @@ service cloud.firestore {
 
     match /players/{id} {
       allow read: if true;
-      allow create, update: if isStaff();
+      allow create: if isStaff();
+      allow update: if isStaff() && !changed().hasAny(['team','marketVersion','recruitId','marketEligible']);
       allow delete: if isUltra();
     }
 
@@ -87,8 +88,7 @@ service cloud.firestore {
     // Ofertas: solo capitanes, cada uno en su documento y por su equipo; las ven solo capitanes y staff
     match /offers/{uid} {
       allow read: if isStaff() || isCaptain();
-      allow create, update: if isStaff()
-        || (isCaptain() && request.auth.uid == uid && itemsOk(['items', 'team']) && request.resource.data.team == capTeam());
+      allow create, update: if false;
       allow delete: if isUltra();
     }
 

@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import admin from "firebase-admin";
 import {fakeDb} from "./helpers/fakedb.mjs";
+import {identityCookie} from "../netlify/lib/recruit-id.mjs";
 import {survey} from "../netlify/lib/recruitment.mjs";
 import endpoint,{rosterReview} from "../netlify/functions/recruitment.mjs";
 import resultEndpoint from "../netlify/functions/results.mjs";
@@ -9,6 +10,10 @@ import {fields} from "../netlify/lib/survey-fields.mjs";
 import {createTiebreak,stageEvidence} from "../netlify/lib/tiebreak.mjs";
 import {cleanRead,matchRows} from "../netlify/lib/scoreboard.mjs";
 
+async function simulateDeliveredReceipt(db,id){
+  await db.doc("recruitjobs/receipt_"+id).set({id,kind:"receipt",hash:"proof",state:"sent"});
+  await db.doc("recruits/"+id).update({receiptState:"sent",receiptHash:"proof",paymentState:"review"});
+}
 test("encuesta en canal autorizado, ficha pública, pago privado y reenvío", async()=>{
   admin.initializeApp();
   const id="123456789012345678";
@@ -24,15 +29,17 @@ test("encuesta en canal autorizado, ficha pública, pago privado y reenvío", as
   const request=(body,token)=>new Request("https://example.test/api/recruitment",{method:"POST",headers:{authorization:"Bearer "+token},body:JSON.stringify(body)});
   const payment={action:"payment",id,paid:true};
   assert.equal((await endpoint(request(payment,"guest"))).status,403);
-  assert.equal((await endpoint(request(payment,"admin"))).status,200);
+  assert.equal((await endpoint(request(payment,"admin"))).status,409);
   await survey(i);
   const privateRow = db._get("recruits/"+id);
-  assert.equal(privateRow.paid,true);
+  assert.equal(!!privateRow.paid,false);
   assert.deepEqual((await (await endpoint(new Request("https://example.test/api/recruitment"))).json()).rows,[]);
   assert.equal((await endpoint(request({action:"approve",id},"guest"))).status,403);
   const approved=await endpoint(request({action:"approve",id},"admin"));
   assert.equal(approved.status,200);
-  const {pid}=await approved.json();
+  assert.deepEqual(db._coll("players"),{});await simulateDeliveredReceipt(db,id);
+  assert.equal((await endpoint(request({...payment,hash:"proof"},"admin"))).status,200);
+  const {pid}=db._get("recruits/"+id);
   assert.equal(db._get("players/"+pid).value,1500);
   assert.equal(db._get("players/"+pid).team,null);
   assert.equal(db._get("players/"+pid).discord,id);
@@ -97,7 +104,10 @@ test("solicitud web, revisión privada y reintento sin alterar a un jugador fich
   const req=(body,token)=>new Request("https://example.test/api/recruitment",{method:"POST",headers:token?{authorization:"Bearer "+token}:{},body:JSON.stringify(body)});
   const answers=Object.fromEntries(fields.map(([key])=>[key,"Sí"]));
   Object.assign(answers,{riot:"Prueba#AR1",principal:"Centinela",discord:"jugador",rango:"Platino 2",motivo:"Privado"});
-  const apply=()=>endpoint(req({action:"apply",answers}));
+  const user={id:"234567890123456789",username:"jugador"};
+  process.env.DISCORD_CLIENT_SECRET="test-only";
+  assert.equal((await endpoint(req({action:"apply",answers}))).status,401);
+  const apply=()=>{const r=req({action:"apply",answers});r.headers.set("cookie",identityCookie(user,process.env.DISCORD_CLIENT_SECRET).split(";")[0]);return endpoint(r);};
   assert.equal((await apply()).status,201);
   assert.equal((await apply()).status,409);
   const [id]=Object.keys(db._coll("recruits"));
@@ -106,9 +116,11 @@ test("solicitud web, revisión privada y reintento sin alterar a un jugador fich
   const approve=()=>endpoint(req({action:"approve",id},"admin"));
   const approved=await approve();
   assert.equal(approved.status,200);
-  const {pid}=await approved.json(), player=db._get("players/"+pid);
+  assert.deepEqual(db._coll("players"),{});await simulateDeliveredReceipt(db,id);
+  assert.equal((await endpoint(req({action:"payment",id,paid:true,hash:"proof"},"admin"))).status,200);
+  const {pid}=db._get("recruits/"+id), player=db._get("players/"+pid);
   assert.equal(player.value,1500); assert.equal(player.team,null); assert.equal(player.role,"Centinela");
-  assert.equal(player.discord,undefined); assert.equal(player.recruitment.discord,"jugador");
+  assert.equal(player.discord,user.id); assert.equal(player.recruitment.discord,"jugador");
   assert.equal(db._get("public/snapshot").json.includes("Privado"),false);
   assert.equal((await endpoint(req({action:"payment",id,paid:true},"admin"))).status,200);
   assert.equal(db._get("recruits/"+id).paid,true);

@@ -17,3 +17,12 @@
   for = "/assets/*"
   [headers.values]
     Cache-Control = "public, max-age=604800"
+
+[[redirects]]
+  from = "/pagar"
+  to = "/pagar.html"
+  status = 200
+[[redirects]]
+  from = "/postular"
+  to = "/postular.html"
+  status = 200

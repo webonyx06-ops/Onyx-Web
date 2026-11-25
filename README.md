@@ -1,16 +1,8 @@
 # ONYX · Liga comunitaria de Valorant
 
-## Activar postulaciones, revisión de equipos y desempates
+## Publicar esta actualización
 
-1. Publicá el contenido del ZIP en la raíz del repositorio de Netlify. Conservá las variables del sitio. Esta actualización usa las reglas de Firestore existentes y guarda las encuestas mediante el servidor.
-2. En **Panel → ONYX Bot**, registrá los comandos y guardá la correspondencia entre cada equipo y su rol de Discord. Para revisar la lista de miembros, activá **Server Members Intent** en el apartado Bot de la aplicación de Discord.
-3. Como administrador, ejecutá **/encuesta** en el canal elegido. Para crear o reutilizar **#postulaciones-onyx**, usá la opción **crear_canal**. El bot necesita permiso para escribir allí y para gestionar canales si tiene que crearlo.
-4. Compartí el enlace desde **Panel → Solicitudes → Copiar enlace de inscripción**. La ruta pública es `/postular.html` y se puede abrir sin cuenta. El bot recibe la misma encuesta con **/postular** en el canal habilitado.
-5. En **Panel → Solicitudes → Revisar postulaciones**, revisá identidad y disponibilidad, aprobá o rechazá cada pedido. Las encuestas antiguas sin decisión aparecen pendientes. Aprobar crea una ficha de jugador libre por **1.500 ONYX Coins**. La declaración de pago y la verificación de los US$ 2 son independientes. Ambas quedan en la vista privada del staff.
-6. En **Panel → Jugadores → Revisar planteles con Discord**, revisá equipos sugeridos y discrepancias de roles antes de mover un jugador. Los nombres de Discord escritos en la web se procesan como datos declarados. El staff puede vincularlos desde los controles de cuentas existentes.
-7. En **Panel de capitán → Resultados**, elegí el partido, pegá o arrastrá la captura y revisá las coincidencias sugeridas. Si ya jugaron el tercer mapa, podés guardar su captura mientras se revisan los dos primeros. Una vez confirmado el 1–1, **Jugamos desempate** crea el tercer partido. Al abrirlo, cada capitán recupera su captura y confirma su marcador.
-8. En **Panel → Resultados** podés ver el tiempo hasta publicación, cuántos partidos medidos cerró el staff y cuántos envíos con OCR llegaron corregidos. Las métricas se forman a partir de esta versión. En **Partidos → Copiar resumen** se arma el texto de la fecha para compartir. Las nuevas copias de seguridad incluyen las capturas. Para copias grandes, usá la restauración desde el panel directamente en Netlify.
-
+Compartí **/postular** con los jugadores. Después de aceptar la solicitud se habilitan el pago y el comprobante. Verificar el comprobante crea la ficha libre por 1.500 ONYX Coins y habilita el ingreso a Discord. El informe **INFORME-ONYX.md** detalla la configuración de roles, canales, reglas de Firestore, pruebas y migración.
 
 Web de la liga: tabla de posiciones con desempates, simulador, playoffs con cuadro, rankings, premios, historia de temporadas, mercado de fichajes con ONYX Coins, resultados por captura (con lectura automática), pronósticos de la comunidad, votación real de capitán, fair play, panel de staff con auditoría y copias de seguridad, y sorteo de mapas en vivo para streamear.
 
