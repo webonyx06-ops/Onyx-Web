@@ -5,7 +5,7 @@ export const guild="1550607388267122788", freeChannel="1575217513476657162", tra
 export const fail=(status,message)=>{throw Object.assign(new Error(message),{status});};
 export const digest=value=>createHash("sha256").update(value).digest("hex").slice(0,24);
 export function queue(tx,db,id,kind,data){
-  tx.set(db.doc("communityjobs/"+id),{kind,...data,state:"pending",next:0,attempt:0,at:Date.now()});
+  tx.set(db.doc("communityjobs/"+id),{kind,...data,state:"pending",next:0,attempt:0,at:Date.now(),...(kind==="roles"?{}:{deliveryUncertain:false})});
 }
 export async function membership(call,id){
   if(!snowflake(id))return null;
@@ -47,13 +47,9 @@ async function announcement(db,call,key,j,p,member){
   const ref=db.doc("marketposts/"+j.pid);
   const prev=(await ref.get()).data();
   if(free && (p.team || (p.marketVersion||0)!==(j.version||0)))return;
-  if(!free && j.to && prev?.message && (prev.version||0)===j.version-1){
-    try{await call("PATCH","/channels/"+freeChannel+"/messages/"+prev.message,{embeds:[{title:"Jugador fichado",description:safeName(p.name),color:0x706582}],allowed_mentions:{parse:[]}});}
-    catch(e){if(e.body?.code!==10008)throw e;}
-  }
   if(!free && !j.to)return;
   const channel=await call("GET","/channels/"+ch);
-  if(channel.guild_id!==guild)fail(403,"Canal fuera del servidor oficial.");
+  if(channel.guild_id!==guild)fail(403,"El canal "+ch+" no pertenece a ONYX.");
   const display=member?"<@"+member.user.id+">":safeName(j.name||p.name);
   const field=(name,value)=>({name,value,inline:true});
   const embed=free?{title:"🟢 NUEVO JUGADOR LIBRE",fields:[field("Jugador",display),field("Rango",safeName(p.rank)),field("Posición",safeName(p.role))]}:
@@ -62,8 +58,8 @@ async function announcement(db,call,key,j,p,member){
   embed.url=env().site+"/#mercado-"+key;
   // If Discord accepted the POST but the function stopped before Firestore acknowledged it,
   // recover the original message even after Discord's nonce window expires.
-  let message;
-  if(j.attempt){
+  let message=j.message?{id:j.message}:null;
+  if(!message && j.attempt && j.deliveryUncertain!==false){
     let before="";
     for(;;){
       const batch=await call("GET","/channels/"+ch+"/messages?limit=100"+(before?"&before="+before:""));
@@ -72,7 +68,19 @@ async function announcement(db,call,key,j,p,member){
       before=batch.at(-1).id;
     }
   }
-  if(!message)message=await call("POST","/channels/"+ch+"/messages",{embeds:[embed],allowed_mentions:{parse:[],users:member?[member.user.id]:[]},nonce:digest(key),enforce_nonce:true});
+  const jobRef=db.doc("communityjobs/"+key);
+  if(!message){
+    await jobRef.update({deliveryUncertain:true});
+    message=await call("POST","/channels/"+ch+"/messages",{embeds:[embed],allowed_mentions:{parse:[],users:member?[member.user.id]:[]},nonce:digest(key),enforce_nonce:true}).catch(async error=>{
+      if(error.status>=400 && error.status<500)await jobRef.update({deliveryUncertain:false});
+      throw error;
+    });
+  }
+  await jobRef.update({message:message.id,channel:ch,deliveryUncertain:false});
+  if(!free && j.to && prev?.message && (prev.version||0)===j.version-1){
+    try{await call("PATCH","/channels/"+freeChannel+"/messages/"+prev.message,{embeds:[{title:"Jugador fichado",description:safeName(p.name),color:0x706582}],allowed_mentions:{parse:[]}});}
+    catch(e){if(e.body?.code!==10008)throw e;}
+  }
   if(free)await ref.set({message:message.id,version:j.version||0});
   return message.id;
 }
@@ -81,27 +89,30 @@ export async function work(db,key,{call=api,now=Date.now,manual=false}={}){
   const j=await db.runTransaction(async tx=>{
     const j=(await tx.get(ref)).data();
     if(!j || j.state==="done" || j.next>now() && (j.state==="sending" || !manual))return;
-    const lock=db.doc("communitylocks/"+j.pid);
+    const lock=db.doc("communitylocks/"+(j.kind==="roles"?"role_":"")+j.pid);
     if(((await tx.get(lock)).data()?.until||0)>now())return;
     tx.set(lock,{until:now()+180000,token});
     tx.update(ref,{state:"sending",token,next:now()+180000,attempt:j.attempt+1});return j;
   });
   if(!j)return;
   const finish=(state,extra={})=>db.runTransaction(async tx=>{
-    const lock=db.doc("communitylocks/"+j.pid);
+    const lock=db.doc("communitylocks/"+(j.kind==="roles"?"role_":"")+j.pid);
     const [current,locked]=await tx.getAll(ref,lock);
     if(locked.data()?.token===token)tx.delete(lock);
     if(current.data()?.token===token)tx.update(ref,{state,next:state==="done"?0:now()+Math.min(3600000,60000*2**Math.min(j.attempt,6)),...extra});
   });
   try{
     if(env().guildId!==guild)fail(409,"Revisá DISCORD_GUILD_ID.");
-    const player=(await db.doc("players/"+j.pid).get()).data();
+    const player=(await db.doc("players/"+j.pid).get()).data() || (j.kind==="transfer"?{name:j.name}:null);
     if(!player){await finish("done");return;}
     const rid=j.rid || player.recruitId;
     const row=rid?(await db.doc("recruits/"+rid).get()).data():null;
     if(j.kind!=="transfer" && (!row?.paid || row.status!=="approved")){await finish("done");return;}
     const uid=row?.discordId || (snowflake(rid)?rid:player.discord);
-    const member=await membership(call,uid);
+    let member;
+    try {member=await membership(call,uid);}
+    catch(e){if(j.kind==="roles" || e.status!==403)throw e;member=null;}
+
     if(j.kind==="roles"){
       if(!member){await finish("waiting",{next:now()+300000});return;}
       const roles=await syncRoles(db,call,row,player,member);

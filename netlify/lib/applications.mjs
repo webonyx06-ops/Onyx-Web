@@ -64,7 +64,7 @@ export async function decideApplication(db,id,action,staff) {
       const players=await tx.get(db.collection("players"));
       if(players.docs.some(d=>d.id!==pid && (norm(d.data().ign)===norm(row.riot)||d.data().discord===recipient)))fail(409,"Ya existe una ficha con esa identidad.");
       if(player && row.pid!==pid)fail(409,"Ya existe ese jugador.");
-      if(!player)tx.set(db.doc("players/"+pid),{name:riot.name,ign:row.riot,team:null,rank:row.rango,role:["Duelista","Iniciador","Controlador","Centinela","Flex","Suplente"].find(v=>norm(v)===norm(row.principal))||"Flex",value:baseValue,clause:0,recruitment:profile(row),discord:recipient,recruitId:id});
+      if(!player)tx.set(db.doc("players/"+pid),{name:riot.name,ign:row.riot,joinedAt:Date.now(),team:null,rank:row.rango,role:["Duelista","Iniciador","Controlador","Centinela","Flex","Suplente"].find(v=>norm(v)===norm(row.principal))||"Flex",value:baseValue,clause:0,recruitment:profile(row),discord:recipient,recruitId:id});
       else tx.update(db.doc("players/"+pid),{recruitId:id,discord:recipient,marketEligible:true});
       tx.set(history,{id,hash:job.hash,method:row.method||null,decision:"verified",by:staff.uid,at:Date.now()});
       tx.update(ref,{pid,paid:true,flowVersion:2,paymentState:"verified",verifiedBy:staff.u,verifiedAt:Date.now(),inviteState:"pending"});

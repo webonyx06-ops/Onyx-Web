@@ -34,7 +34,7 @@ const DEF_RULES = [
 const DEF_CONFIG = {
   season: "Temporada 1", game: "Valorant", points: {w: 3, otw: 2, otl: 1, l: 0}, noShow: -1, playoff: 4,
   maps: MAPS_DEF.map(n => ({n, on: true})), nextDate: "", windowOpen: true, windowClose: "", windowId: 1,
-  maxSign: 2, rosterMin: 5, rosterMax: 7, news: [], awards: {}, credited: [], rules: DEF_RULES.map(([t, d]) => ({t, d})),
+  news: [], awards: {}, credited: [], rules: DEF_RULES.map(([t, d]) => ({t, d})),
   coin: {w: 300, otw: 200, otl: 100, mvp: 150, clean: 100},
 };
 const CAP_VAL_MIN = 100, CAP_VAL_MAX = 1500, CAP_CLAUSE_MAX = 3000;
@@ -1251,7 +1251,7 @@ function openCanje(prizeId) {
     const doc = {prizeId, prize: String(p.name || "").slice(0, 60), ...who, player: pl.name, team: ct, method: how, pts: how === "pts" ? cost : 0, usd: hasUsd ? +p.usd : null,
       note: $("#cjMsg").value.trim().slice(0, 200), by: c.uid, u: c.u, at: Date.now(), status: "pend"};
     closeModal();
-    try { await save(`redeems/${newId("c")}`, doc); toast(`Pedido enviado: ${p.name} para ${pl.name}. El staff lo revisa.`, ct); } catch (e) { /* toast ya mostrado */ }
+    try { if(how==="pts"&&!isCoachId(pid))await api("/api/social",{action:"reservePrize",pid,prizeId,expectedCost:cost,note:doc.note,requestId:crypto.randomUUID()});else await save(`redeems/${newId("c")}`, doc); toast(`Pedido enviado: ${p.name} para ${pl.name}. El staff lo revisa.`, ct); } catch (e) { if(how==="pts"&&!isCoachId(pid))toast(e.message); }
   });
 }
 $("#cjGrid").addEventListener("click", e => { const b = e.target.closest("[data-cj]"); if (b) openCanje(b.dataset.cj); });
@@ -1273,7 +1273,7 @@ function renderMarket() {
   w.style.setProperty("--tc", t.c);
   w.innerHTML = `${img(S.my)}<div><div class="mono muted" style="font-size:12px;letter-spacing:.14em">PRESUPUESTO DE ${esc(t.name)}</div>
     <div class="bal"><i class="coin"></i><span>${fmt(t.coins)}</span><small class="mono muted" style="font-size:14px">ONYX Coins</small></div>
-    <div class="meta"><span>Plantel <b>${roster(S.my).length}/${M.cfg.rosterMax}</b></span><span>Fichajes en esta ventana <b>${signings(S.my)}/${M.cfg.maxSign}</b></span><span>Posición <b>${r ? r.pos : "–"}°</b></span><span>Valor del plantel <b>${fmt(roster(S.my).reduce((s, p) => s + p.value, 0))}</b></span></div></div>
+    <div class="meta"><span>Plantel <b>${roster(S.my).length}/7</b></span><span>Fichajes en esta ventana <b>${signings(S.my)}</b></span><span>Posición <b>${r ? r.pos : "–"}°</b></span><span>Valor del plantel <b>${fmt(roster(S.my).reduce((s, p) => s + p.value, 0))}</b></span></div></div>
     <div class="window"><div class="open" style="${M.cfg.windowOpen ? "" : "color:var(--loss)"}">${M.cfg.windowOpen ? "VENTANA ABIERTA" : "VENTANA CERRADA"}</div><div class="t mono" id="winLeft">${windowLeft()}</div><div class="muted" style="font-size:12px">${M.cfg.windowClose ? "cierra " + fmtDate(M.cfg.windowClose) : ""}</div></div>`;
   const {cat, role, team, sort, q} = S.mk;
   let L = D.P.filter(p => (p.team || M.players[p.id]?.marketEligible!==false) && (cat === "all" || catOf(p.value) === cat) && (role === "all" || p.role === role) && (team === "all" || (team === "free" ? !p.team : p.team === team)) && (!q || p.name.toLowerCase().includes(q.toLowerCase())));
@@ -1287,7 +1287,7 @@ function renderMarket() {
       <div class="pstats"><div><b>${p.s.m ? dec(p.s.kd) : "–"}</b><span>K/D</span></div><div><b>${p.s.m ? p.s.acs : "–"}</b><span>ACS</span></div><div><b>${p.s.m}</b><span>PJ</span></div></div>
       ${p.clause ? `<div class="clause">${LOCK_SVG}Cláusula de rescisión <b>${fmt(p.clause)}</b></div>` : ""}
       <button class="an-link" data-an-card="${p.id}">Ver análisis${(scLeague().all[p.id] || {}).rating != null ? ` · rating ${scLeague().all[p.id].rating}` : ""}</button>
-      <div class="price"><span class="v"><i class="coin"></i>${fmt(p.value)}</span>${!ct ? `<span class="adm-note">${S.captain ? "Sin equipo asignado" : "Solo capitanes"}</span>` : own ? '<button class="btn sm ghost" disabled>Tu plantel</button>' : pend ? '<button class="btn sm ghost" disabled>Oferta enviada</button>' : `<button class="btn sm gold" data-offer="${p.id}">Ofertar</button>`}</div></article>`;
+      <div class="price"><span class="v"><i class="coin"></i>${fmt(p.value)}</span>${!ct ? `<span class="adm-note">${S.captain ? "Sin equipo asignado" : "Solo capitanes"}</span>` : own ? '<button class="btn sm ghost" disabled>Tu plantel</button>' : pend ? '<button class="btn sm ghost" disabled>Oferta enviada</button>' : roster(ct).length>=7 ? '<button class="btn sm ghost" disabled>Tu plantel está completo</button>' : p.team && roster(p.team).length<=5 ? '<button class="btn sm ghost" disabled>Plantel de origen en el mínimo</button>' : `<button class="btn sm gold" data-offer="${p.id}">Ofertar</button>`}</div></article>`;
   }).join("") || '<p class="muted">Ningún jugador coincide con los filtros.</p>';
   const lab={pend:"Pendiente",review:"En revisión",accepted:"Aceptado",ok:"Confirmado",no:"Rechazado",cancelled:"Cancelado"};
   const offerRow = o => { const p = D.PM[o.pid]; return `<div class="offer">${img(o.team)}<div><b>${p ? esc(p.name) : "Jugador borrado"}</b><div class="muted" style="font-size:12px">${esc(TM(o.team).name)} ofrece <span class="mono" style="color:var(--gold)">${fmt(o.amt)}</span>${o.note ? " · " + esc(o.note) : ""}</div></div><span class="st ${o.status === "ok" ? "ok" : o.status === "no" ? "no" : "pend"}">${lab[o.status] || o.status}</span></div>`; };
@@ -1298,15 +1298,14 @@ function renderMarket() {
   $("#feed").innerHTML = [...M.transfers].sort((a, b) => b.at - a.at).map(f => `<div>${f.from ? img(f.from) : `<span class="ava" style="--tc:#5b5675;width:22px;height:24px;font-size:9px">AL</span>`}<b>${esc(f.name)}</b><span class="arrow">→</span>${f.to ? img(f.to) : `<span class="muted" style="font-size:12px">libre</span>`}<span class="amt">${f.amt ? fmt(f.amt) : "–"}</span></div>`).join("") || '<p class="muted" style="font-size:14px">Sin fichajes todavía.</p>';
   const C = M.cfg.coin;
   $("#earnList").innerHTML = `<div>Victoria<b>+${fmt(C.w)}</b></div><div>Victoria en prórroga<b>+${fmt(C.otw)}</b></div><div>Derrota en prórroga<b>+${fmt(C.otl)}</b></div><div>MVP de un partido (al equipo)<b>+${fmt(C.mvp)}</b></div><div>Fecha sin sanciones<b>+${fmt(C.clean)}</b></div>`;
-  $("#mkRules").innerHTML = `<li><b>Plantel</b>Mínimo ${M.cfg.rosterMin}, máximo ${M.cfg.rosterMax} jugadores</li><li><b>Cupo</b>Hasta ${M.cfg.maxSign} incorporaciones por ventana</li><li><b>Ventana</b>${M.cfg.windowOpen ? "Abierta" + (M.cfg.windowClose ? " hasta el " + fmtDate(M.cfg.windowClose) : "") : "Cerrada por ahora"}</li><li><b>Aprobar</b>El capitán ofrece; el admin confirma el pase</li>`;
+  $("#mkRules").innerHTML = `<li><b>Plantel</b>Mínimo 5, máximo 7 jugadores</li><li><b>Fichajes por ventana</b>Sin límite de incorporaciones</li><li><b>Ventana</b>${M.cfg.windowOpen ? "Abierta" + (M.cfg.windowClose ? " hasta el " + fmtDate(M.cfg.windowClose) : "") : "Cerrada por ahora"}</li><li><b>Aprobar</b>El capitán ofrece; el admin confirma el pase</li>`;
 }
 function checksFor(p, amt, team) {
   return [
     [M.cfg.windowOpen, M.cfg.windowOpen ? "La ventana de fichajes está abierta" : "La ventana de fichajes está cerrada"],
     [(+M.teams[team].coins || 0) >= amt, `${TM(team).name} tiene los coins (${fmt(M.teams[team].coins)})`],
-    [roster(team).length < M.cfg.rosterMax, `Hay lugar en el plantel (${roster(team).length}/${M.cfg.rosterMax})`],
-    [!p.team || roster(p.team).length > M.cfg.rosterMin, p.team ? `${TM(p.team).name} no queda con menos de ${M.cfg.rosterMin}` : "Es agente libre"],
-    [signings(team) < M.cfg.maxSign, `Cupo de la ventana (${signings(team)}/${M.cfg.maxSign})`],
+    [roster(team).length < 7, `Hay lugar en el plantel (${roster(team).length}/7)`],
+    [!p.team || roster(p.team).length > 5, p.team ? `${TM(p.team).name} no queda con menos de 5` : "Es agente libre"],
   ];
 }
 function chanceFor(p, amt) { const x = amt / p.value; return p.team ? clamp((x - .8) / .45, .03, .97) : clamp((x - .7) / .35, .05, .98); }
@@ -1571,7 +1570,7 @@ function renderAnalysis() {
   const others = D.P.filter(q => q.id !== p.id && q.s.m).sort((a, b) => a.name.localeCompare(b.name, "es"));
   root.innerHTML = `<div class="an" role="dialog" aria-modal="true" aria-label="Análisis de ${esc(p.name)}"><div class="an-panel" tabindex="-1" style="--tc:${t.c}">
     <div class="an-head">${img(p.lastTeam)}<div class="an-who"><div class="eyebrow">${p.role}${isCap ? " · Capitán" : ""} · ${p.team ? esc(TM(p.team).name) : "Agente libre"}${p.rank ? " · " + esc(p.rank) : ""}</div><h2>${esc(p.name)}</h2>
-      <div class="an-tags">${prof.tags.map(g => `<span>${esc(g)}</span>`).join("")}${ignOf(p.id) ? `<a class="an-trk" href="${trackerUrl(ignOf(p.id))}" target="_blank" rel="noopener noreferrer">${esc(ignOf(p.id))} · Tracker ↗</a>` : ""}</div></div>
+      <div class="an-tags"><button class="btn sm" data-social-open="profile" data-pid="${esc(p.id)}">Perfil social</button>${prof.tags.map(g => `<span>${esc(g)}</span>`).join("")}${ignOf(p.id) ? `<a class="an-trk" href="${trackerUrl(ignOf(p.id))}" target="_blank" rel="noopener noreferrer">${esc(ignOf(p.id))} · Tracker ↗</a>` : ""}</div></div>
       <div class="an-rating" title="Rating ONYX: combina ACS, K/D, kills, asistencias, supervivencia, victorias y asistencia a fechas, comparado con toda la liga (0 a 100)"><b>${rating ?? "–"}</b><span>Rating ONYX</span></div>
       <button class="x" data-an-close aria-label="Cerrar">×</button></div>
     <div class="an-body">
@@ -1602,7 +1601,8 @@ function compareHtml() {
   const rows = [["Rating ONYX", q => q.rating, 1, v => v ?? "–"], ["Partidos", q => q.x.m, 0, v => v], ["K/D", q => q.x.m ? q.x.kd : null, 1, v => v == null ? "–" : dec2(v)], ["ACS", q => q.x.m ? q.x.acs : null, 1, v => v ?? "–"],
     ["Kills por partido", q => q.x.m ? q.x.kpm : null, 1, v => v == null ? "–" : dec1(v)], ["Muertes por partido", q => q.x.m ? q.x.dpm : null, -1, v => v == null ? "–" : dec1(v)], ["Asist. por partido", q => q.x.m ? q.x.apm : null, 1, v => v == null ? "–" : dec1(v)],
     ["Kills por ronda", q => q.x.m ? q.x.kpr : null, 1, v => v == null ? "–" : dec2(v)], ["Victorias", q => q.x.m ? q.x.win : null, 1, v => v == null ? "–" : pctTxt(v)], ["MVP", q => q.x.mvps, 1, v => v], ["Asistencia a fechas", q => q.x.att, 1, v => v == null ? "–" : v + "%"]];
-  if (mk) rows.push(["Valor", q => q.p.value, 0, v => fmt(v)], ["Cláusula", q => q.p.clause || null, 0, v => v ? fmt(v) : "–"]);
+  rows.push(...[["Rango","rank"],["Peak elo","peak"],["Rol principal","role"],["Secundario","secondary"],["Agentes","agents"]].map(([l,k])=>[l,q=>window.onyxProfiles.player(q.p.id)?.[k],0,v=>esc(v||"—")]));
+    if (mk) rows.push(["Valor", q => q.p.value, 0, v => fmt(v)], ["Cláusula", q => q.p.clause || null, 0, v => v ? fmt(v) : "–"]);
   const body = rows.map(([l, f, dir, fm]) => { const vals = P.map(f), ok = vals.filter(v => v != null), best = dir && ok.length > 1 ? (dir > 0 ? Math.max(...ok) : Math.min(...ok)) : null;
     return `<tr><th>${l}</th>${vals.map(v => `<td class="${best != null && v === best ? "best" : ""}">${fm(v)}${best != null && v === best ? " ★" : ""}</td>`).join("")}</tr>`; }).join("");
   const bars = SC_MET.filter(([f]) => P.some(q => q.pc[f] != null)).map(([f, l]) => `<div class="cmp-m"><span class="pc-l">${esc(l)}</span><div class="cmp-bars">${P.map(q => q.pc[f] == null ? `<div class="cmp-b"><span class="muted" style="font-size:11px">sin datos</span></div>` : `<div class="cmp-b" data-tiph="${esc(`<b>${q.pc[f]}</b> ${esc(q.p.name)} · mejor que el ${q.pc[f]}% de la liga`)}" tabindex="0"><i style="width:${Math.max(2, q.pc[f])}%;--c:${q.c}"></i><em>${q.pc[f]}</em></div>`).join("")}</div></div>`).join("");
@@ -2009,7 +2009,7 @@ function renderAdmin() {
     return `${head}<button class="${S.adm.tab === k ? "on" : ""}" data-act="tab:${k}">${ico(ADM_ICON[k] || "i-grid")}<span>${l}</span>${badge[k] ? `<span class="tab-badge">${badge[k]}</span>` : ""}</button>`; }).join("");
   const again = !!root.querySelector(".adm");
   root.innerHTML = `<div class="adm ${isUltra() ? "is-ultra" : ""} ${again ? "noanim" : ""}" role="dialog" aria-modal="true" aria-label="Panel de administración"><div class="adm-panel">
-    <div class="adm-head"><div class="adm-title">${ico("i-staff")}<div><h2>${isUltra() ? "Panel ultra" : "Panel de staff"}</h2><span class="save-state" id="saveState"></span></div></div><span class="sp"></span>
+    <div class="adm-head">${isUltra()?'<button class="btn sm" data-social-open="admin">Perfiles y tienda</button>':""}<div class="adm-title">${ico("i-staff")}<div><h2>${isUltra() ? "Panel ultra" : "Panel de staff"}</h2><span class="save-state" id="saveState"></span></div></div><span class="sp"></span>
       <span class="who-chip ${isUltra() ? "ultra" : ""}">${ico("i-user")}${esc(S.staff.u)}<small>${isUltra() ? "Ultra staff" : "Staff"}</small></span>
       <button class="btn sm" data-act="stream">${ico("i-play")}<span>Modo streamer</span></button><button class="btn sm ghost" data-act="logout">${ico("i-logout")}<span>Cerrar sesión</span></button><button class="btn sm ghost icon-only" data-act="close" aria-label="Cerrar el panel" title="Cerrar (Esc)">${ico("i-close")}</button></div>
     <div class="adm-main"><nav class="adm-tabs" aria-label="Secciones del panel">${tabsHtml}</nav>
@@ -2182,7 +2182,7 @@ function admRendimiento(R, Dr) {
       ${ps.map(p => { const L = (perfOf(p.id).pts || []).slice().sort((a, b) => b.at - a.at), tot = ptsSum(p.id);
         return `<tr>${nm(p)}<td class="mono" style="color:${tot > 0 ? "var(--win)" : tot < 0 ? "var(--loss)" : "inherit"}">${fv("pts", tot)}</td><td style="text-align:left"><div class="pts-chips">${L.map(x => `<span class="pts-chip" title="${esc(x.by || "")} · ${new Date(x.at).toLocaleDateString("es-AR")}"><b class="${x.v > 0 ? "up" : "dn"}">${x.v > 0 ? "+" : ""}${x.v}</b>${esc(x.why || "")}${x.f ? ` · F${x.f}` : ""}<button data-act="pts-del:${p.id}:${x.id}" aria-label="Quitar">×</button></span>`).join("") || '<span class="adm-note">–</span>'}</div></td></tr>`; }).join("")}</tbody></table></div>`;
   }
-  return `<div class="adm-card"><h3>Rendimiento individual <small>asistencia, skills y puntos para premios individuales</small></h3>${views}${chips}${body}</div>`;
+  return `<div class="adm-card"><button class="btn ultra-only" data-social-open="admin">Administrar colecciones y perfiles</button><h3>Rendimiento individual <small>asistencia, skills y puntos para premios individuales</small></h3>${views}${chips}${body}</div>`;
 }
 function admTabla(R, Dr) {
   const P = R.cfg.points, st = Dr.real;
@@ -2401,8 +2401,8 @@ function admMercado(R, Dr) {
       ${["pend","review","accepted"].includes(o.status) ? `<span class="rowbtns"><b>${({pend:"Pendiente",review:"En revisión",accepted:"Aceptado"})[o.status]}</b>${o.status==="pend"?`<button class="btn sm" data-act="off-review:${o.uid}:${o.id}">Revisar</button>`:""}${o.status!=="accepted"?`<button class="btn sm" data-act="off-accept:${o.uid}:${o.id}">Aceptar</button>`:""}<button class="btn sm ghost" data-act="off-cancel:${o.uid}:${o.id}">Cancelar</button><button class="btn sm gold" data-act="off-ok:${o.uid}:${o.id}" ${p ? "" : "disabled"}>Confirmar y ejecutar</button><button class="btn sm ghost" data-act="off-no:${o.uid}:${o.id}">Rechazar</button></span>` : `<span class="st ${o.status === "ok" ? "ok" : "no"}">${({ok:"Confirmado",no:"Rechazado",cancelled:"Cancelado",review:"En revisión",accepted:"Aceptado",pend:"Pendiente"})[o.status] || o.status}</span>`}</div>`; };
   return `${isUltra()?'<button class="btn sm" data-sync-panel>Operaciones de Discord y pagos</button>':""}<div class="adm-card"><h3>Ventana de fichajes</h3><div class="fgrid">
     ${fld("Estado", `<span class="chk"><input type="checkbox" ${c.windowOpen ? "checked" : ""} data-bind="cfg:windowOpen" data-t="b">Ventana abierta</span>`)}${fld("Cierra", `<input type="datetime-local" value="${esc((c.windowClose || "").slice(0, 16))}" data-bind="cfg:windowClose" data-t="s">`)}
-    ${fld("Fichajes por ventana", `<input type="number" min="0" value="${c.maxSign}" data-bind="cfg:maxSign" data-t="n">`)}${fld("Plantel mínimo", `<input type="number" min="1" value="${c.rosterMin}" data-bind="cfg:rosterMin" data-t="n">`)}${fld("Plantel máximo", `<input type="number" min="1" value="${c.rosterMax}" data-bind="cfg:rosterMax" data-t="n">`)}</div>
-    <div class="rowbtns"><button class="btn sm ultra-only" data-act="window-new">Abrir una ventana nueva (reinicia el cupo)</button><span class="adm-note">Ventana actual: N° ${c.windowId}</span></div></div>
+    </div><p class="adm-note">Los capitanes pueden fichar mientras haya lugar hasta siete. El club de origen debe conservar cinco jugadores.</p>
+    <div class="rowbtns"><button class="btn sm ultra-only" data-act="window-new">Reiniciar ventana de fichajes</button><span class="adm-note">Ventana N° ${c.windowId}. El reinicio abre una nueva ventana sin fecha de cierre y pone en cero el contador de fichajes del período. Se conservan ofertas, historial y planteles.</span></div></div>
     <div class="adm-card"><h3>Ofertas <small>${pend.length} esperando</small></h3><div style="display:grid;gap:6px">${offers.length ? offers.map(offerRow).join("") : '<p class="adm-note">No llegaron ofertas. Los capitanes ofertan desde el mercado (necesitan permiso de colaborador).</p>'}</div></div>
     <div class="adm-card"><h3>Pase manual</h3><div class="fgrid">${fld("Jugador", `<select id="trP">${pOpts}</select>`)}${fld("Va a", `<select id="trTo">${teamOpts("", true)}</select>`)}${fld("Monto", `<input id="trAmt" type="number" min="0" step="50" value="0">`)}</div>
       <div class="rowbtns"><button class="btn sm gold" data-act="tr-manual">Hacer el pase</button><span class="adm-note">Descuenta el monto al equipo que compra y se lo suma al que vende. “Agente libre” = liberarlo.</span></div></div>
@@ -2515,7 +2515,7 @@ async function staffApi(body) {
 const FL = {discord: "link de Discord", payLink: "link de pago", moneyText: "qué compran los dólares", "coach.maxRefills": "recargas por temporada", "results.auto": "carga automática de resultados", "results.ai": "lectura de capturas con IA", "results.aiDaily": "lecturas por día", "coach.salary": "sueldo semanal del coach", "coach.usd": "recarga en dólares", "coach.refill": "coins de la recarga", fecha: "fecha", leg: "ida/vuelta", date: "día y hora", a: "equipo A", b: "equipo B", status: "estado", ra: "rondas del equipo A", rb: "rondas del equipo B", ot: "prórroga", noShow: "W.O.", map: "mapa", proj: "proyección oficial", mvp: "MVP",
   name: "nombre", team: "equipo", role: "rol", rank: "rango", value: "valor de mercado", c: "color", l: "color claro", coins: "ONYX Coins", fp: "fair play", captain: "capitán", sub: "subcapitán", order: "orden",
   "adj.pts": "ajuste de puntos", "adj.rf": "ajuste de rondas a favor", "adj.rc": "ajuste de rondas en contra", season: "temporada", game: "juego", nextDate: "próxima fecha", windowOpen: "ventana abierta",
-  windowClose: "cierre de la ventana", maxSign: "fichajes por ventana", rosterMin: "plantel mínimo", rosterMax: "plantel máximo", noShowCfg: "penalización por W.O.", playoff: "puestos de playoffs", news: "novedades", rules: "reglas",
+  windowClose: "cierre de la ventana", noShowCfg: "penalización por W.O.", playoff: "puestos de playoffs", news: "novedades", rules: "reglas",
   "points.w": "puntos por victoria", "points.otw": "puntos por victoria en prórroga", "points.otl": "puntos por derrota en prórroga", "points.l": "puntos por derrota",
   "coin.w": "coins por victoria", "coin.otw": "coins por victoria en prórroga", "coin.otl": "coins por derrota en prórroga", "coin.mvp": "coins por MVP", "coin.clean": "coins por fecha sin sanciones",
   resolution: "resolución", fpDelta: "fair play a descontar", clause: "cláusula de rescisión"};
@@ -3035,7 +3035,7 @@ $("#adminRoot").addEventListener("change", async e => {
   if (kind === "prize") { await prizeBind(p[0], p[1], v); return; }
   if (kind === "rd") { const r = clone(S.remote.redeems[p[0]]); if (!r) return; r.delivered = !!v; await save(`redeems/${p[0]}`, r); audit(`Canje de ${r.prize} para ${r.player}: ${v ? "marcado como entregado" : "marcado como no entregado"}`); return; }
   if (kind === "cap") { await capBind(p, v); return; }
-  if (kind === "cfg" && !isUltra() && !/^(windowOpen|windowClose|maxSign|rosterMin|rosterMax)$/.test(p[0])) { toast("Esto lo puede cambiar solo ultra staff."); return; }
+  if (kind === "cfg" && !isUltra() && !/^(windowOpen|windowClose)$/.test(p[0])) { toast("Esto lo puede cambiar solo ultra staff."); return; }
   if (kind === "cfg" && p[0] === "discord" && v && !DISCORD_RE.test(v)) { toast("Ese link no es una invitación de Discord (tiene que empezar con https://discord.gg/)."); renderAdminSoon(); return; }
   if (kind === "cfg" && p[0] === "payLink" && v && !/^https:\/\/[^\s"'<>]{6,300}$/.test(v)) { toast("El link de pago tiene que empezar con https://"); renderAdminSoon(); return; }
   if (kind === "cfg" && p[0] === "results.aiDaily" && !(v >= 1 && v <= 200)) { toast("Entre 1 y 200 lecturas por día."); renderAdminSoon(); return; }
@@ -3218,7 +3218,7 @@ async function adminClick(e) {
     else if (act === "p-del") { if (!arm(b)) return; const pid = a[0]; const pn = (R.players[pid] || {}).name; await save(`players/${pid}`, null, "del"); audit(`Borró al jugador ${pn}`);
       for (const k of TEAM_KEYS) { const t = teamDoc(k); if (t.captain === pid || t.sub === pid) { if (t.captain === pid) t.captain = null; if (t.sub === pid) t.sub = null; await save(`teams/${k}`, t); } }
       toast("Jugador borrado. Sus estadísticas en partidos quedan guardadas pero no se muestran."); renderAdminSoon(); }
-    else if (act === "window-new") { if (!arm(b)) return; const d = cfgDoc(); d.windowId = (+d.windowId || 1) + 1; d.windowOpen = true; await save("league/config", d); toast("Ventana nueva abierta: el cupo de fichajes vuelve a cero."); audit(`Abrió la ventana de fichajes N° ${d.windowId}`); renderAdminSoon(); }
+    else if (act === "window-new") { if (!arm(b)) return; await api("/api/market",{action:"resetWindow",windowId:R.cfg.windowId}); toast("Nueva ventana de fichajes abierta."); renderAdminSoon(); }
     else if (["off-ok","off-no","off-review","off-accept","off-cancel"].includes(act)) {
       const [owner,key]=a;await api("/api/market",{owner,key,action:{"off-ok":"confirm","off-no":"reject","off-review":"review","off-accept":"accept","off-cancel":"cancel"}[act]});
       toast("Estado del pase actualizado.");renderAdminSoon();
@@ -5558,6 +5558,7 @@ renderAll();
 setInterval(tickClock, 1000);
 initShell();
 initFirebase();
+window.onyxProfiles={api,me:()=>myPid(),ultra:isUltra,scout:openAnalysis,players:()=>M&&!M.ex?D.P.map(p=>({id:p.id,name:p.name})):[],player:id=>{const p=D?.PM[id];if(!p||M.ex)return null;const raw=S.remote.players[id]||{},r=raw.recruitment||{},v=vsOf(id);return {percentiles:p.s.m?pcsOf(metricsOf(p),scLeague()):null,name:p.name,team:p.team?TM(p.team).name:"Agente libre",ign:ignOf(id),role:r.principal||p.role,secondary:r.secundario||null,agents:r.agentes||null,rank:v?.rank||raw.rank||null,peak:v?.peak?.rank||r.peak||null,country:r.pais,hours:r.horarios,flex:r.flex,joined:raw.joinedAt||null,v,seasons:Object.values(S.remote.seasons||{}).filter(s=>s.players?.[id]).map(s=>({name:s.name,stats:s.players[id],awards:Object.values(s.awards||{}).filter(a=>a.id===id).map(a=>a.label)})),points:(perfOf(id).pts||[]).filter(x=>x.id!=="carry"&&x.v>0).map(x=>({at:x.at,v:x.v})),log:p.log.map(x=>({...x,map:S.remote.matches[x.mid]?.map||null,agent:S.remote.matches[x.mid]?.stats?.[id]?.agent||null,extra:Object.fromEntries(["adr","kast","hs","firstBloods","aces","clutches","teamMvp"].map(k=>[k,S.remote.matches[x.mid]?.stats?.[id]?.[k]]))})),s:p.s,mvps:D.played.filter(m=>m.mvpId===id).length,transfers:M.transfers.filter(t=>t.pid===id).sort((a,b)=>b.at-a.at),awards:AWARD_KINDS.filter(([k])=>M.cfg.awards?.[k]===id).map(x=>x[1])};}};
 finishDiscordLogin();
 })();
 
@@ -5566,7 +5567,7 @@ document.addEventListener("click",async e=>{
   async function show(){
     const d=await api("/api/recruitment",{action:"operations"});
     const when=t=>t?new Date(t).toLocaleString("es-AR"):"—";
-    const job=j=>`<p><strong>${esc(j.kind)} · ${esc(j.pid)}</strong> · ${esc(j.state)} ${esc(j.error||"")} ${j.roles?esc(j.roles.join(", ")):""} ${j.state!=="done" || j.kind==="roles"?`<button class="btn sm" data-job="${esc(j.id)}">Resincronizar</button>`:""}</p>`;
+    const job=j=>`<p><strong>${esc(({transfer:"Movimiento de mercado",free:"Jugador libre",roles:"Roles"})[j.kind]||j.kind)} · ${esc(j.name||j.pid)}</strong> · ${esc(({done:j.message?"Publicado":"Completado",retry:j.message?"Publicado · actualización pendiente":"Pendiente de reintento",sending:"En proceso",pending:"En cola",waiting:"Esperando ingreso"})[j.state]||j.state)} ${j.kind!=="roles" && j.message?`<a target="_blank" rel="noopener" href="https://discord.com/channels/1550607388267122788/${j.kind==="free"?"1575217513476657162":"1575215567391039498"}/${encodeURIComponent(j.message)}">Ver mensaje</a>`:""} ${esc(j.error||"")} ${j.roles?esc(j.roles.join(", ")):""} ${j.state!=="done" || j.kind==="roles"?`<button class="btn sm" data-job="${esc(j.id)}">Resincronizar</button>`:""}</p>`;
     modal(`<div class="box cut"><div class="bh"><h3>Operaciones de Discord</h3><button class="x" data-close>×</button></div><div class="bb"><h4>Roles y anuncios</h4>${d.jobs.map(job).join("")||"Sin operaciones."}<h4>Historial de pagos</h4>${d.history.sort((a,b)=>b.at-a.at).map(h=>`<p>${esc(h.id)} · ${esc(h.decision)} · ${esc(h.method||"")} · ${esc(h.by)} · ${when(h.at)}</p>`).join("")||"Sin verificaciones."}<h4>Invitaciones</h4>${d.invites.map(i=>`<p>${esc(i.id)} · ${esc(i.state)} · Vence ${when(i.expires)}</p>`).join("")||"Sin invitaciones."}<h4>Errores de entrega</h4>${d.deliveryErrors.map(v=>`<p>${esc(v.id)} · ${esc(v.kind)} · ${esc(v.error)} · ${when(v.at)}</p>`).join("")||"Sin errores."}<h4>Historial de acceso</h4>${d.events.map(v=>`<p>${esc(v.id)} · ${esc(v.event)} · ${when(v.at)}</p>`).join("")}</div></div>`);
     document.querySelectorAll("[data-job]").forEach(b=>b.onclick=async()=>{b.disabled=true;try{await api("/api/recruitment",{action:"retryJob",key:b.dataset.job});await show();}catch(err){toast(err.message);b.disabled=false;}});
   }

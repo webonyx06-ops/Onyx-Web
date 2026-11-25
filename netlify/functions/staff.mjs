@@ -137,7 +137,7 @@ async function seedLeague(db) {
   batch.set(cfgRef, {
     season: "Temporada 1", game: "Valorant", points: { w: 3, otw: 2, otl: 1, l: 0 }, noShow: -1, playoff: 4,
     maps: MAPS.map((n) => ({ n, on: true })), nextDate: "", windowOpen: true, windowClose: "", windowId: 1,
-    maxSign: 2, rosterMin: 5, rosterMax: 7, news: [], awards: {}, credited: [],
+    news: [], awards: {}, credited: [],
     rules: RULES.map(([t, d]) => ({ t, d })), coin: { w: 300, otw: 200, otl: 100, mvp: 150, clean: 100 },
   });
   TEAMS.forEach(([k, name, c, l], i) => batch.set(db.doc(`teams/${k}`), {

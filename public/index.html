@@ -26,7 +26,7 @@
 <link rel="stylesheet" href="css/styles.css">
 <script>try { if (JSON.parse(localStorage.getItem("liga-t1:side")) === true) document.documentElement.classList.add("side-mini"); } catch (e) {}</script>
 <link rel="stylesheet" href="css/league.css">
-</head>
+<link rel="stylesheet" href="css/perfiles.css"></head>
 <body>
 <svg xmlns="http://www.w3.org/2000/svg" width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
   <symbol id="i-home" viewBox="0 0 24 24"><path d="M3.5 10.6 12 3.8l8.5 6.8"/><path d="M5.5 9.2V20h4.8v-5.4h3.4V20h4.8V9.2"/></symbol>
@@ -353,7 +353,7 @@
       <div><div class="crumb"><svg class="ic"><use href="#i-trophy"/></svg><span>Liga</span></div><h2>MVP y mejores por rol</h2>
         <p>Pasá el mouse (o tocá) para ver los números y el criterio de cada premio.</p></div>
     </div>
-    <div class="awards" id="awards"></div>
+    <button class="btn" type="button" data-social-open="shop">Tienda de personalizaciones</button> <button class="btn" type="button" data-social-open="profile">Perfiles de jugadores</button><div class="awards" id="awards"></div>
   </section>
 
   <!-- CANJES -->
@@ -363,7 +363,7 @@
         <p>Los jugadores juntan puntos individuales y los cambian por premios. El canje lo pide el capitán del equipo y el staff lo aprueba.</p></div>
       <div class="cj-saldo cut-s"><label for="cjPlayer" class="muted">Saldo de</label><select id="cjPlayer" aria-label="Ver el saldo de un jugador"></select><b id="cjSaldoVal">–</b></div>
     </div>
-    <div class="cj-note" id="cjNote"></div>
+    <button class="btn" type="button" data-social-open="shop">Tienda de personalizaciones</button><div class="cj-note" id="cjNote"></div>
     <div class="cj-grid" id="cjGrid"></div>
     <div class="cj-bottom">
       <div class="panel pad cut" id="cjMineBox" hidden><div class="h3">Pedidos de tu equipo</div><div id="cjMine" style="display:grid;gap:6px;margin-top:12px"></div></div>
@@ -377,7 +377,7 @@
       <div><div class="crumb"><svg class="ic"><use href="#i-coins"/></svg><span>Capitanes</span></div><h2>Mercado de fichajes</h2>
         <p>Cada equipo tiene un presupuesto en ONYX Coins. Solo los capitanes pueden fichar: ofertan con su cuenta y el staff aprueba cada pase. Los jugadores con cláusula de rescisión se van si alguien la paga.</p></div>
     </div>
-    <div class="panel pad cut recruit-intro"><h3>Agentes libres</h3><div class="rowbtns"><a class="btn gold" href="postular.html">Postularme</a><button class="btn" type="button" data-recruit="public">Ver todas las fichas</button></div><div id="freePreview" class="free-preview"></div></div>
+    <button class="btn" type="button" data-social-open="profile">Perfiles de jugadores</button><div class="panel pad cut recruit-intro"><h3>Agentes libres</h3><div class="rowbtns"><a class="btn gold" href="postular.html">Postularme</a><button class="btn" type="button" data-recruit="public">Ver todas las fichas</button></div><div id="freePreview" class="free-preview"></div></div>
     <div class="mk-lock cut" id="mkLock">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
       <div><b>Ingresá para hacer ofertas</b><span>Los capitanes ven los jugadores, sus valores y cláusulas, y ofertan desde acá. Si sos capitán, entrá con tu cuenta.</span></div>
@@ -516,7 +516,7 @@
   </section>
 
   <!-- MI PERFIL -->
-  <section class="sec view" id="perfil" data-title="Mi perfil">
+  <section class="sec view" id="perfil" data-title="Mi perfil"><button class="btn" data-social-open="profile">Abrir mi perfil social</button>
     <div class="sec-head">
       <div><div class="crumb"><svg class="ic"><use href="#i-user"/></svg><span>Jugadores</span></div><h2>Mi perfil</h2>
         <p>Entrá con Discord o con tu mail para confirmar si jugás, hacer tus pronósticos, votar en tu equipo, ver tus números y las notas de tu coach.</p></div>
@@ -621,6 +621,6 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <script src="js/firebase-config.js"></script>
-<script src="js/app.js"></script>
+<script src="js/app.js"></script><script type="module" src="js/perfiles.mjs"></script>
 </body>
 </html>

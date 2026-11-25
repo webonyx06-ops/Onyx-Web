@@ -39,7 +39,7 @@ export function summarizeMatches(list) {
   const top = (o) => Object.entries(o).sort((x, y) => y[1] - x[1]).slice(0, 3).map(([n, c]) => ({ n, c }));
   const last = ms.map((m) => Date.parse(m.meta && m.meta.started_at) || 0).sort((x, y) => y - x)[0] || null;
   return {
-    games: ms.length, wins, winPct: decided ? Math.round((wins / decided) * 100) : null,
+    games: ms.length, wins, losses:decided-wins, winPct: decided ? Math.round((wins / decided) * 100) : null,
     k, d, a, kd: d ? r2(k / d) : r2(k), kda: d ? r2((k + a) / d) : r2(k + a),
     acs: rounds ? Math.round(score / rounds) : null, adr: rounds ? Math.round(dmg / rounds) : null,
     hs: shots ? r1((hs / shots) * 100) : null, kpr: rounds ? r2(k / rounds) : null,
@@ -62,7 +62,8 @@ export async function fetchValStats(ign, { fetchImpl = fetch, prev = null, now =
     rank: cur.tier && cur.tier.name && cur.tier.name !== "Unrated" ? cur.tier.name : null, tierId: (cur.tier && cur.tier.id) || 0, rr: cur.rr ?? null, elo: cur.elo ?? null, lastChange: cur.last_change ?? null,
     peak: peak && peak.tier ? { rank: peak.tier.name, season: (peak.season && peak.season.short) || "" } : null,
     season: season ? { short: (season.season && season.season.short) || "", wins: season.wins || 0, games: season.games || 0 } : null,
-    recent: summarizeMatches(sm), at: now, ok: true,
+    series: (Array.isArray(sm)?sm:[]).filter(m=>m?.stats&&m.meta?.started_at).sort((a,b)=>Date.parse(a.meta.started_at)-Date.parse(b.meta.started_at)).slice(-20).map(m=>{const s=summarizeMatches([m]);return {label:m.meta.started_at.slice(5,10),k:s.k,d:s.d,a:s.a,kd:s.kd,hs:s.hs,acs:s.acs,map:m.meta.map?.name||null,agent:m.stats.character?.name||null};}),
+    trend: [...(prev?.trend||[]).filter(x=>x.day!==new Date(now).toISOString().slice(0,10)),{day:new Date(now).toISOString().slice(0,10),label:new Date(now).toISOString().slice(5,10),rr:cur.rr??null,tier:cur.tier?.id??null}].slice(-90),successAt:now,recent: summarizeMatches(sm), at: now, ok: true,
   };
 }
 
@@ -83,7 +84,7 @@ export async function refreshMany(db, due, { fetchImpl = fetch, now = Date.now()
       try { const v = await fetchValStats(x.ign, { fetchImpl, prev: x.prev, now }); await db.doc(`valstats/${x.pid}`).set(v); paths.push(`valstats/${x.pid}`); res.ok++; }
       catch (e) {
         if (e.code === "rate" || e.code === "key" || e.code === "nokey") { res.stopped = e.code; return; }
-        const id = splitRiot(x.ign), keep = x.prev && x.prev.ok ? x.prev : {};
+        const id = splitRiot(x.ign), keep = x.prev && x.prev.ok ? {...x.prev,successAt:x.prev.successAt||(!x.prev.code?x.prev.at:null)} : {};
         await db.doc(`valstats/${x.pid}`).set({ ...keep, ign: id ? `${id.name}#${id.tag}` : String(x.ign), ok: !!keep.ok, code: e.code || "bad", error: String(e.message || "").slice(0, 160), at: now, tried: now });
         paths.push(`valstats/${x.pid}`); res.err++;
       }

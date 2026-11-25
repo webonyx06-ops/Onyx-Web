@@ -8,6 +8,18 @@ const keyOk=s=>typeof s==="string" && /^[A-Za-z0-9_-]{1,128}$/.test(s);
 const active=["pend","review","accepted"];
 export async function market(db,me,b){
   if(!me?.staff && !me?.captain)fail(403,"Se requiere una cuenta de staff o capitán.");
+  if(b.action==="resetWindow"){
+    if(!me.ultra)fail(403,"Solo el ultra admin puede reiniciar la ventana.");
+    if(!Number.isSafeInteger(b.windowId) || b.windowId<1)fail(400,"Ventana inválida.");
+    return db.runTransaction(async tx=>{
+      const ref=db.doc("league/config"),current=(await tx.get(ref)).data()?.windowId??1;
+      if(current!==b.windowId)fail(409,"La ventana ya cambió. Actualizá el panel.");
+      tx.set(ref,{windowId:current+1,windowOpen:true,windowClose:""},{merge:true});
+      tx.set(db.collection("audit").doc(),{uid:me.uid,u:me.u,role:me.role,at:Date.now(),txt:"Reinició la ventana de fichajes N° "+(current+1)});
+      tx.set(db.doc("pubqueue/main"),{paths:admin.firestore.FieldValue.arrayUnion(ref.path),at:Date.now()},{merge:true});
+      return {paths:[ref.path],jobs:[]};
+    });
+  }
   const submit=b.action==="submit",manual=b.action==="manual",cancel=b.action==="cancel";
   if(!submit && !cancel && !me.staff || submit && !me.captain)fail(403,"Permisos insuficientes.");
   const owner=submit || cancel && !me.staff?me.uid:b.owner;
@@ -41,14 +53,16 @@ export async function market(db,me,b){
     if(from===to || (!submit && (manual?b.from!==from || b.version!==version:offer.from!==undefined && offer.from!==from || offer.version!==undefined && offer.version!==version)))fail(409,"El plantel cambió. Revisá el jugador y la oferta.");
     const amt=manual||submit?b.amt:offer.amt;
     if(!Number.isSafeInteger(amt)||amt<0||amt>100000000||!to && amt!==0)fail(400,"Monto inválido.");
-    const [allTeams,config,players,transfers]=await Promise.all([tx.get(db.collection("teams")),tx.get(db.doc("league/config")),tx.get(db.collection("players")),tx.get(db.collection("transfers"))]);
+    const [allTeams,config,players]=await Promise.all([tx.get(db.collection("teams")),tx.get(db.doc("league/config")),tx.get(db.collection("players"))]);
     const teams=Object.fromEntries(allTeams.docs.map(d=>[d.id,d.data()])),cfg=config.data()||{},win=cfg.windowId??1;
     if(to && !teamKeysFrom(teams).includes(to))fail(409,"Equipo inactivo.");
     const funds=Number(teams[to]?.coins??6000);
     if(to && amt>funds)fail(409,"Saldo insuficiente.");
     if(!manual){
       const count=k=>players.docs.filter(d=>d.data().team===k).length;
-      if(!to || cfg.windowOpen===false || count(to)>=(cfg.rosterMax??7) || from && count(from)<=(cfg.rosterMin??5) || transfers.docs.filter(d=>d.data().to===to && d.data().win===win).length>=(cfg.maxSign??2))fail(409,"La ventana o los cupos del plantel impiden el pase.");
+      if(!to || cfg.windowOpen===false)fail(409,"La ventana de fichajes está cerrada.");
+      if(count(to)>=7)fail(409,"El equipo comprador ya tiene siete jugadores.");
+      if(from && count(from)<=5)fail(409,"El equipo de origen necesita conservar al menos cinco jugadores.");
     }
     const rid=player.recruitId || (await tx.get(db.collection("recruits").where("pid","==",pid))).docs[0]?.id;
     const ridData=rid?(await tx.get(db.doc("recruits/"+rid))).data():null;

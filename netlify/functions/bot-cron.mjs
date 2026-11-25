@@ -1,3 +1,4 @@
+import {syncPremium} from "../lib/premium-sync.mjs";
 // ONYX Bot · revisión automática cada 10 minutos (Netlify la corre sola en el sitio publicado).
 // Manda recordatorios antes de cada partido, resultados, mapas sorteados y fichajes, y paga los sueldos de los coaches los lunes.
 import { initAdmin } from "../lib/admin.mjs";
@@ -24,7 +25,9 @@ export default async () => {
   try { const L = await loadSnapshot(); if (L) { const paths = await closeExpired(db, L); if (paths.length) { await patchSnapshot(db, paths); clearSnapshotCache(); pub.votaciones = paths.length; } } } catch (e) { console.error("votaciones:", e); }
   let r = { skipped: "ONYX Bot sin configurar" }, status = 200;
   if (configured()) {
-    try {await upgradeRecruitment(db);await tickCommunity(db);}catch(e){console.error("Mercado y roles:",e.message);}
+    try {await syncPremium(db);}catch(e){console.error("Premium:",e.message);}
+    try {await tickCommunity(db);}catch(e){console.error("Mercado y roles:",e.message);}
+    try {await upgradeRecruitment(db);}catch(e){console.error("Migración de inscripciones:",e.message);}
     try { await retryDeliveries(db); } catch(e){console.error("Reclutamiento:",e.message);}
     try { r = await runTick(db); } catch (e) { console.error("ONYX Bot:", e); r = { error: String(e.message || e) }; status = 500; }
   }
