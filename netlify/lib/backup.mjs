@@ -3,10 +3,10 @@
 // Se guardan las últimas 30 diarias y las últimas 40 manuales.
 
 // El resumen público y su cola se regeneran. La evidencia se conserva junto con el partido.
-const SKIP_COLL = new Set(["pubqueue"]);
+const SKIP_COLL = new Set(["pubqueue","recruitjobs","receiptuploads","fixtureops","communityjobs","marketposts","communitylocks"]);
 const SKIP_DOC = new Set(["public/snapshot"]);
 // No se pisan al restaurar: cuentas (van atadas al login), auditoría, ONYX Bot y lo que se rearma solo
-export const NO_RESTORE = new Set(["staff", "captains", "audit", "bot", "public", "pubqueue", "sys"]);
+export const NO_RESTORE = new Set(["staff", "captains", "audit", "bot", "public", "pubqueue", "sys","receipthashes","paymenthistory","invitehistory", "recruitjobs","receiptuploads","fixtureops","communityjobs","marketposts","communitylocks"]);
 export const KEEP = { daily: 30, manual: 40 };
 
 // Fechas de Firestore (Timestamp) → { __ts: ms } para poder volver a guardarlas igual

@@ -12,7 +12,7 @@ export default async (req, context) => {
   const versioned = new URL(req.url).searchParams.has("h");
   try {
     const d = await getDocRest(`${coll}/${id}`);
-    if (coll==="logos" && id==="onyx" && d?.brandVersion!==11) return Response.redirect(new URL("/assets/emblemas/onyx.webp?v=11",req.url),302);
+    if (coll==="logos" && id==="onyx" && d?.brandVersion===11) return Response.redirect(new URL("/assets/emblemas/onyx.webp?v=owl12",req.url),302);
     const m = d && typeof d[FIELD[coll]] === "string" && d[FIELD[coll]].match(/^data:(image\/(?:webp|png|jpeg|gif));base64,(.+)$/);
     if (m) {
       const cache = versioned ? "public, max-age=31536000, immutable" : "public, max-age=300";

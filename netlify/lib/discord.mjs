@@ -46,10 +46,11 @@ export class DiscordError extends Error {
 export async function api(method, path, body, reason) {
   const { token } = env();
   const headers = { Authorization: `Bot ${token}`, "User-Agent": "ONYX Bot (onyx, 1.0)" };
-  if (body !== undefined) headers["Content-Type"] = "application/json";
+  const multipart=typeof FormData!=="undefined" && body instanceof FormData;
+  if (body !== undefined && !multipart) headers["Content-Type"] = "application/json";
   if (reason) headers["X-Audit-Log-Reason"] = encodeURIComponent(String(reason).slice(0, 400));
   for (let attempt = 0; attempt < 2; attempt++) {
-    const r = await fetch(API + path, { method, headers, body: body !== undefined ? JSON.stringify(body) : undefined });
+    const r = await fetch(API + path, { method, headers, body: multipart ? body : body !== undefined ? JSON.stringify(body) : undefined });
     if (r.status === 429 && attempt === 0) { const j = await r.json().catch(() => ({})); await new Promise((ok) => setTimeout(ok, Math.min(3000, (j.retry_after || 1) * 1000))); continue; }
     if (r.status === 204) return null;
     const j = await r.json().catch(() => null);

@@ -8,7 +8,7 @@ export default async (req, context) => {
   if (!/^[a-z0-9]{2,20}$/.test(k)) return new Response("No encontrado", { status: 404 });
   try {
     const d = await getDocRest(`logos/${k}`);
-    if (k==="onyx" && d?.brandVersion!==11) return Response.redirect(new URL("/assets/emblemas/onyx.webp?v=11",req.url),302);
+    if (k==="onyx" && d?.brandVersion===11) return Response.redirect(new URL("/assets/emblemas/onyx.webp?v=owl12",req.url),302);
     const m = d && typeof d.data === "string" && d.data.match(/^data:(image\/(?:webp|png|jpeg));base64,(.+)$/);
     if (m) return new Response(Buffer.from(m[2], "base64"), { headers: { "content-type": m[1], "cache-control": "public, max-age=86400" } });
   } catch (_) { /* sigue con el logo de base */ }

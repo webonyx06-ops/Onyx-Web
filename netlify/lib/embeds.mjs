@@ -7,8 +7,9 @@ const hex = (c) => { const n = parseInt(String(c || "").replace("#", ""), 16); r
 // Logo del equipo: el personalizado (servido por /api/logo) o el de base. Los equipos nuevos sin logo no llevan imagen.
 const emblem = (k, L) => {
   const t = L && L.teams && L.teams[k];
+  if(k==="onyx" && t?.logoAt)return `${env().site}/api/logo/onyx?v=owl12-${t.logoAt}`;
   if (t && t.logoAt) return `${env().site}/api/logo/${k}?v=${t.logoAt}`;
-  if (k==="onyx") return `${env().site}/assets/emblemas/onyx.webp?v=11`;
+  if (k==="onyx") return `${env().site}/assets/emblemas/onyx.webp?v=owl12`;
   return BASE_KEYS.includes(k) ? `${env().site}/assets/emblemas/${k}.webp` : undefined;
 };
 const thumb = (k, L) => { const u = emblem(k, L); return u ? { url: u } : undefined; };

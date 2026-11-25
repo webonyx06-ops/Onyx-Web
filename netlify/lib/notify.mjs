@@ -3,7 +3,7 @@ import { TEAM_DEF, TEAM_KEYS, parseLocal, build, legSort } from "./league.mjs";
 const KEY_OK = /^[a-z0-9]{2,20}$/;
 import { listColl, loadLeague, loadMatches, loadSnapshot } from "./fsrest.mjs";
 import { patchSnapshot } from "./publish.mjs";
-import { sendMessage } from "./discord.mjs";
+import { env, sendMessage } from "./discord.mjs";
 import * as E from "./embeds.mjs";
 
 export const OFFSETS = [[1440, "24 h antes"], [720, "12 h antes"], [360, "6 h antes"], [180, "3 h antes"], [60, "1 h antes"], [30, "30 min antes"], [0, "Al empezar"]];
@@ -303,7 +303,7 @@ export async function runTick(db, { now = Date.now(), force = false } = {}) {
 
     // 4) fichajes
     for (const tr of transfers) {
-      if (state.transfers.includes(tr.id)) continue;
+      if (env().guildId==="1550607388267122788" || state.transfers.includes(tr.id)) continue;
       const mark = () => { state.transfers.push(tr.id); };
       if (cfg.general.transfers && cfg.channels.mercado) jobs.push({ ch: cfg.channels.mercado, make: (L) => E.msg(E.transferEmbed(L, tr)), label: `Fichaje · ${tr.name}`, mark });
       else mark();
@@ -332,3 +332,4 @@ export async function runTick(db, { now = Date.now(), force = false } = {}) {
     throw e;
   }
 }
+

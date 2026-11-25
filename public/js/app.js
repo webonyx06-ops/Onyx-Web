@@ -1,6 +1,6 @@
 (() => {
 "use strict";
-const BASE_EMB = Object.fromEntries(["onyx","orion","nexus","zenith","vortex","zyriax","kyrox"].map(k => [k, `assets/emblemas/${k}.webp${k==="onyx"?"?v=11":""}`]));
+const BASE_EMB = Object.fromEntries(["onyx","orion","nexus","zenith","vortex","zyriax","kyrox"].map(k => [k, `assets/emblemas/${k}.webp${k==="onyx"?"?v=owl12":""}`]));
 const EMB = {...BASE_EMB};
 const FB_CONFIG = window.FIREBASE_CONFIG || {};
 const FB_READY = !!(FB_CONFIG.apiKey && FB_CONFIG.projectId && window.firebase);
@@ -187,7 +187,7 @@ function syncTeams() {
   const custom = Object.keys(T).filter(k => !DEF_KEYS.includes(k) && /^[a-z0-9]{2,20}$/.test(k) && T[k] && T[k].custom && !T[k].hidden)
     .sort((a, b) => (+T[a].order || 0) - (+T[b].order || 0) || a.localeCompare(b));
   const keys = [...DEF_KEYS.filter(k => !(T[k] && T[k].hidden)), ...custom];
-  keys.forEach(k => { const d = T[k] || {}; EMB[k] = (Lg[k] && (k!=="onyx" || Lg[k].brandVersion===11) && Lg[k].data) || BASE_EMB[k] || initialsLogo(d.name || k, d.c); });
+  keys.forEach(k => { const d = T[k] || {}; EMB[k] = (Lg[k] && (k!=="onyx" || Lg[k].brandVersion!==11) && Lg[k].data) || BASE_EMB[k] || initialsLogo(d.name || k, d.c); });
   if (keys.join() !== TEAM_KEYS.join()) { TEAM_KEYS.length = 0; TEAM_KEYS.push(...keys); onTeamsChanged(); }
   else if (typeof renderOrbit === "function") renderOrbit(); // el logo llega después del equipo, o cambió el nombre o el color
 }
@@ -1265,7 +1265,7 @@ function signings(k) { return M.transfers.filter(t => t.to === k && (t.win ?? 0)
 const marketAccess = () => !!(S.captain || S.staff);
 function renderMarket() {
   const acc = marketAccess();
-  const available = D.P.filter(p=>!p.team && M.players[p.id]?.recruitment).sort((a,b)=>a.name.localeCompare(b.name));
+  const available = D.P.filter(p=>!p.team && M.players[p.id]?.marketEligible!==false && M.players[p.id]?.recruitment).sort((a,b)=>a.name.localeCompare(b.name));
   $("#freePreview").innerHTML = available.length ? available.slice(0,4).map(p=>`<button type="button" class="free-preview-card" data-free-player="${esc(p.id)}"><b>${esc(p.name)}</b><span>${esc(p.role)} · ${esc(p.rank)}</span><strong>${fmt(p.value)} ONYX Coins</strong></button>`).join("") : '<p class="adm-note">Todavía no hay agentes libres con una postulación aprobada.</p>';
   $("#mkLock").hidden = acc; $("#mkBody").hidden = !acc; $("#navMk").hidden = false; $("#heroMk").hidden = !acc; $("#mgrCoinsBox").hidden = !acc;
   if (!acc) { ["#cards", "#myOffers", "#allOffers", "#wallet"].forEach(id => { $(id).innerHTML = ""; }); return; }
@@ -1276,9 +1276,9 @@ function renderMarket() {
     <div class="meta"><span>Plantel <b>${roster(S.my).length}/${M.cfg.rosterMax}</b></span><span>Fichajes en esta ventana <b>${signings(S.my)}/${M.cfg.maxSign}</b></span><span>Posición <b>${r ? r.pos : "–"}°</b></span><span>Valor del plantel <b>${fmt(roster(S.my).reduce((s, p) => s + p.value, 0))}</b></span></div></div>
     <div class="window"><div class="open" style="${M.cfg.windowOpen ? "" : "color:var(--loss)"}">${M.cfg.windowOpen ? "VENTANA ABIERTA" : "VENTANA CERRADA"}</div><div class="t mono" id="winLeft">${windowLeft()}</div><div class="muted" style="font-size:12px">${M.cfg.windowClose ? "cierra " + fmtDate(M.cfg.windowClose) : ""}</div></div>`;
   const {cat, role, team, sort, q} = S.mk;
-  let L = D.P.filter(p => (cat === "all" || catOf(p.value) === cat) && (role === "all" || p.role === role) && (team === "all" || (team === "free" ? !p.team : p.team === team)) && (!q || p.name.toLowerCase().includes(q.toLowerCase())));
+  let L = D.P.filter(p => (p.team || M.players[p.id]?.marketEligible!==false) && (cat === "all" || catOf(p.value) === cat) && (role === "all" || p.role === role) && (team === "all" || (team === "free" ? !p.team : p.team === team)) && (!q || p.name.toLowerCase().includes(q.toLowerCase())));
   L.sort((a, b) => sort === "v" ? b.value - a.value : sort === "acs" ? b.s.acs - a.s.acs : b.s.kd - a.s.kd);
-  const ct = capTeam(), pendingIds = new Set(ct ? allOffers().filter(o => o.status === "pend" && o.team === ct).map(o => o.pid) : []);
+  const ct = capTeam(), pendingIds = new Set(ct ? allOffers().filter(o => ["pend","review","accepted"].includes(o.status) && o.team === ct).map(o => o.pid) : []);
   $("#cards").innerHTML = L.map(p => {
     const tt = p.team ? TM(p.team) : null, own = !!ct && p.team === ct, pend = pendingIds.has(p.id);
     return `<article class="pcard cut tilt" style="--tc:${tt ? tt.c : "#8f8aa6"}">${!p.team ? '<span class="free-tag">LIBRE</span>' : ""}<div class="glare"></div>
@@ -1289,11 +1289,11 @@ function renderMarket() {
       <button class="an-link" data-an-card="${p.id}">Ver análisis${(scLeague().all[p.id] || {}).rating != null ? ` · rating ${scLeague().all[p.id].rating}` : ""}</button>
       <div class="price"><span class="v"><i class="coin"></i>${fmt(p.value)}</span>${!ct ? `<span class="adm-note">${S.captain ? "Sin equipo asignado" : "Solo capitanes"}</span>` : own ? '<button class="btn sm ghost" disabled>Tu plantel</button>' : pend ? '<button class="btn sm ghost" disabled>Oferta enviada</button>' : `<button class="btn sm gold" data-offer="${p.id}">Ofertar</button>`}</div></article>`;
   }).join("") || '<p class="muted">Ningún jugador coincide con los filtros.</p>';
-  const lab = {pend: "Esperando", ok: "Aceptada", no: "Rechazada"};
+  const lab={pend:"Pendiente",review:"En revisión",accepted:"Aceptado",ok:"Confirmado",no:"Rechazado",cancelled:"Cancelado"};
   const offerRow = o => { const p = D.PM[o.pid]; return `<div class="offer">${img(o.team)}<div><b>${p ? esc(p.name) : "Jugador borrado"}</b><div class="muted" style="font-size:12px">${esc(TM(o.team).name)} ofrece <span class="mono" style="color:var(--gold)">${fmt(o.amt)}</span>${o.note ? " · " + esc(o.note) : ""}</div></div><span class="st ${o.status === "ok" ? "ok" : o.status === "no" ? "no" : "pend"}">${lab[o.status] || o.status}</span></div>`; };
   const mine = myOffers().slice().sort((a, b) => b.at - a.at);
-  $("#myOffers").innerHTML = !ct ? '<p class="muted" style="font-size:14px">Solo los capitanes pueden fichar. Si sos capitán, entrá con tu cuenta desde “Acceso staff y capitanes”, al pie de la página.</p>' : M.ex ? '<p class="muted" style="font-size:14px">En el modo de ejemplo las ofertas no se envían.</p>' : !S.db ? '<p class="muted" style="font-size:14px">Las ofertas se envían cuando la página está conectada a Firebase.</p>' : mine.length ? mine.map(offerRow).join("") : '<p class="muted" style="font-size:14px">Todavía no ofertaste. Elegí un jugador y tocá “Ofertar”.</p>';
-  const pend = allOffers().filter(o => o.status === "pend");
+  $("#myOffers").innerHTML = !ct ? '<p class="muted" style="font-size:14px">Solo los capitanes pueden fichar. Si sos capitán, entrá con tu cuenta desde “Acceso staff y capitanes”, al pie de la página.</p>' : M.ex ? '<p class="muted" style="font-size:14px">En el modo de ejemplo las ofertas no se envían.</p>' : !S.db ? '<p class="muted" style="font-size:14px">Las ofertas se envían cuando la página está conectada a Firebase.</p>' : mine.length ? mine.map(o=>offerRow(o)+(["pend","review","accepted"].includes(o.status)?`<button class="btn sm ghost" data-cancel-offer="${esc(o.id)}">Cancelar mi oferta</button>`:"")).join("") : '<p class="muted" style="font-size:14px">Todavía no ofertaste. Elegí un jugador y tocá “Ofertar”.</p>';
+  const pend = allOffers().filter(o => ["pend","review","accepted"].includes(o.status));
   $("#allOffers").innerHTML = pend.length ? pend.slice(0, 12).map(offerRow).join("") : '<p class="muted" style="font-size:14px">No hay ofertas esperando respuesta.</p>';
   $("#feed").innerHTML = [...M.transfers].sort((a, b) => b.at - a.at).map(f => `<div>${f.from ? img(f.from) : `<span class="ava" style="--tc:#5b5675;width:22px;height:24px;font-size:9px">AL</span>`}<b>${esc(f.name)}</b><span class="arrow">→</span>${f.to ? img(f.to) : `<span class="muted" style="font-size:12px">libre</span>`}<span class="amt">${f.amt ? fmt(f.amt) : "–"}</span></div>`).join("") || '<p class="muted" style="font-size:14px">Sin fichajes todavía.</p>';
   const C = M.cfg.coin;
@@ -1339,10 +1339,9 @@ function openOffer(pid) {
     if (M.ex) { closeModal(); toast("Modo de ejemplo: la oferta no se envía.", team); return; }
     if (!S.db || !team || !S.uid) { closeModal(); toast("Tu sesión de capitán no está activa. Volvé a entrar.", team); return; }
     const uid = S.uid;
-    const items = clone(myOffers()).slice(-40); items.push({id: newId("o"), pid, team, amt, len, msg, at: Date.now(), status: "pend"});
-    closeModal();
-    try { await save(`offers/${uid}`, {items, team}); toast(`Oferta enviada por ${p.name}: ${fmt(amt)} coins. El admin la revisa.`, team); }
-    catch (e) { /* toast ya mostrado */ }
+    const key=newId("offer");closeModal();
+    try {await api("/api/market",{action:"submit",key,pid,amt,len,msg});toast("Oferta enviada al staff.",team);}
+    catch(e){toast(e.message);}
   });
 }
 $("#cards").addEventListener("click", e => { const a = e.target.closest("[data-an-card]"); if (a) { openAnalysis(a.dataset.anCard); return; } const b = e.target.closest("[data-offer]"); if (b) openOffer(b.dataset.offer); });
@@ -2023,6 +2022,10 @@ function deriveFor(R) { const keepM = M, keepD = D; M = R; derive(); const out =
 $("#adminRoot").addEventListener("focusout", () => setTimeout(() => { const ae = document.activeElement; if (S.adm.dirty && !($("#adminRoot").contains(ae) && ae.matches("input,select,textarea"))) { S.adm.dirty = false; renderAdmin(); } }, 30));
 
 function matchLabel(R, m) { return `F${m.fecha}${m.leg ? " " + LEG_L[m.leg] : ""} · ${R.teams[m.a] ? R.teams[m.a].name : "?"} vs ${R.teams[m.b] ? R.teams[m.b].name : "?"}`; }
+function openManualMatch(fecha) {
+  S.adm.manualFecha=fecha; S.adm.nmType="single"; S.adm.tab="partidos"; openAdmin();
+  requestAnimationFrame(()=>{const select=$("#nmA");if(select){select.scrollIntoView({block:"center"});select.focus({preventScroll:true});}});
+}
 function admPartidos(R, Dr) {
   const ms = Dr.ms;
   const allP = Object.entries(R.players).map(([id, p]) => ({id, ...p})).sort((a, b) => (a.name || "").localeCompare(b.name || ""));
@@ -2035,11 +2038,11 @@ function admPartidos(R, Dr) {
       ${fld("Kills", `<input id="qK" type="number" min="0" inputmode="numeric" placeholder="0">`)}${fld("Muertes", `<input id="qD" type="number" min="0" inputmode="numeric" placeholder="0">`)}
       ${fld("Asistencias", `<input id="qA" type="number" min="0" inputmode="numeric" placeholder="0">`)}${fld("ACS", `<input id="qACS" type="number" min="0" inputmode="numeric" placeholder="0">`)}</div>
       <div class="rowbtns"><button class="btn sm gold" data-act="quick-save">Guardar estadísticas</button><span class="adm-note">Si el jugador ya tenía números en ese partido, se reemplazan. Para que cuenten en los rankings, el partido tiene que estar marcado como jugado.</span></div>` : `<p class="adm-note">Primero creá los partidos.</p>`}</div>`;
-  const iv = S.adm.nmType !== "single";
+  const iv = S.adm.nmType === "iv";
   const add = `<div class="adm-card"><h3>Agregar partido</h3>
     <div class="seg nm-type" role="group" aria-label="Tipo">${[["iv", "Ida y vuelta", "2 partidos: en la vuelta se invierte local y visitante"], ["single", "Partido único", "1 partido"]].map(([v, l, t]) => `<button type="button" data-nm-type="${v}" class="${(v === "iv") === iv ? "on" : ""}" title="${t}" aria-pressed="${(v === "iv") === iv}">${l}</button>`).join("")}</div>
     <div class="fgrid">
-    ${fld("Fecha N°", `<input id="nmF" type="number" min="1" value="${Dr.nextF || Dr.fechas + 1 || 1}">`)}${fld("Equipo A", `<select id="nmA">${teamOpts(TEAM_KEYS[0])}</select>`)}${fld("Equipo B", `<select id="nmB">${teamOpts(TEAM_KEYS[1])}</select>`)}
+    ${fld("Fecha N°", `<input id="nmF" type="number" min="1" value="${S.adm.manualFecha || Dr.nextF || Dr.fechas + 1 || 1}">`)}${fld("Equipo A", `<select id="nmA">${teamOpts(TEAM_KEYS[0])}</select>`)}${fld("Equipo B", `<select id="nmB">${teamOpts(TEAM_KEYS[1])}</select>`)}
     <label class="fld"><span id="nmDateL">${iv ? "Día y hora de la ida" : "Día y hora"}</span><input id="nmDate" type="datetime-local"></label>
     <label class="fld" id="nmDate2W" ${iv ? "" : "hidden"}><span>Día y hora de la vuelta</span><input id="nmDate2" type="datetime-local"></label></div>
     <div class="rowbtns"><button class="btn sm" data-act="m-add" id="nmGo">${iv ? "Agregar ida y vuelta" : "Agregar partido"}</button>
@@ -2048,13 +2051,13 @@ function admPartidos(R, Dr) {
   const list = Object.keys(byF).map(Number).sort((a, b) => a - b).map(f => {
     const credited = R.cfg.credited.includes(f), allPlayed = byF[f].every(m => m.status === "played");
     return `<div class="adm-card"><h3>Fecha ${f} <small>${byF[f].filter(m => m.status === "played").length}/${byF[f].length} jugados</small><span style="flex:1"></span>
-      <button class="btn sm ghost danger ultra-only" data-act="fecha-del:${f}">Borrar fecha</button><button class="btn sm ${credited ? "ghost" : ""}" data-act="credit:${f}" ${credited || !allPlayed ? "disabled" : ""} title="${!allPlayed ? "Se habilita cuando todos los partidos de la fecha estén jugados" : ""}">${credited ? "Coins acreditados" : "Acreditar coins de la fecha"}</button></h3>
+      <button class="btn sm ghost ultra-only" data-act="nuevo-en:${f}">Agregar partido</button><button class="btn sm ghost danger ultra-only" data-act="fecha-del:${f}">Borrar fecha</button><button class="btn sm ${credited ? "ghost" : ""}" data-act="credit:${f}" ${credited || !allPlayed ? "disabled" : ""} title="${!allPlayed ? "Se habilita cuando todos los partidos de la fecha estén jugados" : ""}">${credited ? "Coins acreditados" : "Acreditar coins de la fecha"}</button></h3>
       <div style="display:grid;gap:6px">${byCruce(byF[f]).map(m => admMatchRow(R, Dr, m, allP)).join("")}</div></div>`;
   }).join("");
   const gen = `<div class="adm-card ultra-only"><h3>${ico("i-calendar")} Fixture de la temporada <small>solo ultra staff</small></h3>
     <p class="adm-note">Sorteá todas las fechas de una vez: todos contra todos 2 veces (o las que quieras), en fechas distintas, con local y visitante parejos. Antes de crear ves cómo queda y podés sortear de nuevo.${ms.length ? ` Ya hay ${Dr.fechas} fecha${Dr.fechas === 1 ? "" : "s"}: las nuevas se agregan a continuación (o borrá todo y empezá de cero).` : ""}</p>
     <div class="rowbtns"><button class="btn sm gold" data-act="fx-open">${ico("i-swap")}<span>Generar todas las fechas</span></button>${ms.length ? `<button class="btn sm danger" data-act="fecha-del-all">Borrar todas las fechas</button>` : ""}</div></div>`;
-  return gen + quick + add + (list || `<div class="adm-card"><p class="adm-note">Todavía no hay partidos.</p></div>`);
+  return add + gen + quick + (list || `<div class="adm-card"><p class="adm-note">Todavía no hay partidos.</p></div>`);
 }
 function admMatchRow(R, Dr, m, allP) {
   const open = S.adm.openMatch === m.id, A = R.teams[m.a] || {name: "?"}, B = R.teams[m.b] || {name: "?"};
@@ -2103,7 +2106,7 @@ function admJugadores(R, Dr) {
 }
 function admCounts() {
   const req = Object.values(S.requests).filter(r => r.status === "pend").length;
-  const off = allOffers().filter(o => o.status === "pend").length;
+  const off = allOffers().filter(o => ["pend","review","accepted"].includes(o.status)).length;
   let rep = 0; Object.values(S.remote.reports).forEach(d => (d.items || []).forEach(r => { if (["recibida", "revision", "apelada"].includes(r.status)) rep++; }));
   const cj = Object.values(S.remote.redeems).filter(r => r.status === "pend").length;
   const sal = TEAM_KEYS.filter(k => teamPendSal(k).length).length;
@@ -2147,7 +2150,7 @@ function reqRow(R, r, actions) {
 function admSolicitudes(R) {
   const L = Object.entries(S.requests).map(([id, r]) => ({id, ...r})).sort((a, b) => (a.status === "pend" ? 0 : 1) - (b.status === "pend" ? 0 : 1) || b.at - a.at);
   const pend = L.filter(r => r.status === "pend"), shown = S.adm.rqAll ? L : pend;
-  return `<div class="adm-card"><h3>Postulaciones de jugadores</h3><p class="adm-note">Revisá las solicitudes de la web y de Discord. Cada alta aprobada entra al mercado libre por 1.500 ONYX Coins.</p><div class="rowbtns"><button class="btn gold" data-recruit="staff">Revisar postulaciones<span data-application-count></span></button><button class="btn ghost" data-share-application>Copiar enlace de inscripción</button></div></div><div class="adm-card"><h3>Solicitudes de capitanes <small>${pend.length} pendientes · los capitanes no pueden cambiar nada sin tu aprobación</small></h3>
+  return `<div class="adm-card"><h3>Postulaciones de jugadores</h3><p class="adm-note">Revisá las solicitudes de la web y de Discord. Después de verificar el pago entra al mercado libre por 1.500 ONYX Coins.</p><div class="rowbtns"><button class="btn gold" data-recruit="staff">Revisar postulaciones<span data-application-count></span></button><button class="btn ghost" data-share-application>Copiar enlace de inscripción</button></div></div><div class="adm-card"><h3>Solicitudes de capitanes <small>${pend.length} pendientes · los capitanes no pueden cambiar nada sin tu aprobación</small></h3>
       <div class="seg"><button class="${S.adm.rqAll ? "" : "on"}" data-act="rq-filter:pend">Pendientes</button><button class="${S.adm.rqAll ? "on" : ""}" data-act="rq-filter:all">Todas</button></div>
       <div style="display:grid;gap:6px">${shown.map(r => reqRow(R, r, true)).join("") || `<p class="adm-note">${S.adm.rqAll ? "Todavía no hay solicitudes." : "No hay solicitudes pendientes."}</p>`}</div>
       <p class="adm-note">Al aprobar un alta, el jugador se crea en el equipo con el valor y la cláusula pedidos. Al aprobar un cambio, se actualizan el valor y la cláusula del jugador. Rangos que puede pedir un capitán: valor de ${fmt(CAP_VAL_MIN)} a ${fmt(CAP_VAL_MAX)}, cláusula hasta ${fmt(CAP_CLAUSE_MAX)}.</p></div>`;
@@ -2306,7 +2309,7 @@ async function teamAction(act, k, btn) {
 async function teamLogoUpload(k, file) {
   if (!isUltra()) { toast("Los logos los cambia solo ultra staff."); return; }
   try { toast("Subiendo logo…"); const data = await logoFromFile(file), at = Date.now();
-    await save(`logos/${k}`, {data, at, by: S.staff.u, ...(k==="onyx"?{brandVersion:11}:{})}); const d = teamDoc(k); d.logoAt = at; await save(`teams/${k}`, d);
+    await save(`logos/${k}`, {data, at, by: S.staff.u, ...(k==="onyx"?{brandVersion:12}:{})}); const d = teamDoc(k); d.logoAt = at; await save(`teams/${k}`, d);
     audit(`Cambió el logo de ${RM().teams[k].name}`); toast("Logo actualizado."); renderAdminSoon(); }
   catch (e) { toast(e.message || "No se pudo subir el logo."); }
 }
@@ -2391,12 +2394,12 @@ async function prizeImgUpload(id, file) {
   catch (e) { toast(e.message || "No se pudo subir la foto."); }
 }
 function admMercado(R, Dr) {
-  const c = R.cfg, offers = allOffers(), pend = offers.filter(o => o.status === "pend");
+  const c = R.cfg, offers = allOffers(), pend = offers.filter(o => ["pend","review","accepted"].includes(o.status));
   const pOpts = Object.entries(R.players).map(([id, p]) => ({id, ...p})).sort((a, b) => (a.name || "").localeCompare(b.name || "")).map(p => opt(p.id, `${p.name} · ${p.team ? R.teams[p.team].name : "libre"}`)).join("");
   const offerRow = o => { const p = R.players[o.pid];
     return `<div class="offer-adm">${img(o.team)}<div><b>${esc(R.teams[o.team].name)}</b> ofrece <b class="mono" style="color:var(--gold)">${fmt(o.amt)}</b> por <b>${p ? esc(p.name) : "jugador borrado"}</b>${p ? ` (${p.team ? esc(R.teams[p.team].name) : "libre"})` : ""}${p && +p.clause && o.amt >= +p.clause ? ` <span class="st claus">PAGA LA CLÁUSULA</span>` : p && +p.clause ? ` <span class="adm-note">· cláusula ${fmt(p.clause)}</span>` : ""}<div class="adm-note">${esc(o.len || "")}${o.msg ? " · “" + esc(o.msg) + "”" : ""} · coins de ${esc(R.teams[o.team].name)}: ${fmt(R.teams[o.team].coins)}</div></div>
-      ${o.status === "pend" ? `<span class="rowbtns"><button class="btn sm gold" data-act="off-ok:${o.uid}:${o.id}" ${p ? "" : "disabled"}>Aprobar pase</button><button class="btn sm ghost" data-act="off-no:${o.uid}:${o.id}">Rechazar</button></span>` : `<span class="st ${o.status === "ok" ? "ok" : "no"}">${o.status === "ok" ? "Aprobada" : "Rechazada"}</span>`}</div>`; };
-  return `<div class="adm-card"><h3>Ventana de fichajes</h3><div class="fgrid">
+      ${["pend","review","accepted"].includes(o.status) ? `<span class="rowbtns"><b>${({pend:"Pendiente",review:"En revisión",accepted:"Aceptado"})[o.status]}</b>${o.status==="pend"?`<button class="btn sm" data-act="off-review:${o.uid}:${o.id}">Revisar</button>`:""}${o.status!=="accepted"?`<button class="btn sm" data-act="off-accept:${o.uid}:${o.id}">Aceptar</button>`:""}<button class="btn sm ghost" data-act="off-cancel:${o.uid}:${o.id}">Cancelar</button><button class="btn sm gold" data-act="off-ok:${o.uid}:${o.id}" ${p ? "" : "disabled"}>Confirmar y ejecutar</button><button class="btn sm ghost" data-act="off-no:${o.uid}:${o.id}">Rechazar</button></span>` : `<span class="st ${o.status === "ok" ? "ok" : "no"}">${({ok:"Confirmado",no:"Rechazado",cancelled:"Cancelado",review:"En revisión",accepted:"Aceptado",pend:"Pendiente"})[o.status] || o.status}</span>`}</div>`; };
+  return `${isUltra()?'<button class="btn sm" data-sync-panel>Operaciones de Discord y pagos</button>':""}<div class="adm-card"><h3>Ventana de fichajes</h3><div class="fgrid">
     ${fld("Estado", `<span class="chk"><input type="checkbox" ${c.windowOpen ? "checked" : ""} data-bind="cfg:windowOpen" data-t="b">Ventana abierta</span>`)}${fld("Cierra", `<input type="datetime-local" value="${esc((c.windowClose || "").slice(0, 16))}" data-bind="cfg:windowClose" data-t="s">`)}
     ${fld("Fichajes por ventana", `<input type="number" min="0" value="${c.maxSign}" data-bind="cfg:maxSign" data-t="n">`)}${fld("Plantel mínimo", `<input type="number" min="1" value="${c.rosterMin}" data-bind="cfg:rosterMin" data-t="n">`)}${fld("Plantel máximo", `<input type="number" min="1" value="${c.rosterMax}" data-bind="cfg:rosterMax" data-t="n">`)}</div>
     <div class="rowbtns"><button class="btn sm ultra-only" data-act="window-new">Abrir una ventana nueva (reinicia el cupo)</button><span class="adm-note">Ventana actual: N° ${c.windowId}</span></div></div>
@@ -3005,7 +3008,7 @@ function readVal(el) {
 // Agregar partido: ida y vuelta o partido único (cambia el formulario sin perder lo que ya escribiste)
 $("#adminRoot").addEventListener("click", e => {
   const t = e.target.closest("[data-nm-type]"); if (!t) return;
-  S.adm.nmType = t.dataset.nmType; const iv = S.adm.nmType !== "single";
+  S.adm.nmType = t.dataset.nmType; const iv = S.adm.nmType === "iv";
   t.parentElement.querySelectorAll("button").forEach(b => { b.classList.toggle("on", b === t); b.setAttribute("aria-pressed", b === t); });
   const set = (id, fn) => { const el = $(id); if (el) fn(el); };
   set("#nmDate2W", el => { el.hidden = !iv; }); set("#nmDateL", el => { el.textContent = iv ? "Día y hora de la ida" : "Día y hora"; });
@@ -3041,7 +3044,7 @@ $("#adminRoot").addEventListener("change", async e => {
   try {
     if (kind === "cfg") { const d = cfgDoc(); setPath(d, p[0], v); await save("league/config", d); }
     else if (kind === "team") { const d = teamDoc(p[0]); setPath(d, p[1], v); await save(`teams/${p[0]}`, d); }
-    else if (kind === "player") { const d = playerDoc(p[0]); if (!d) return; if (p[1] === "name" && !v) { toast("El nombre no puede quedar vacío."); return; } setPath(d, p[1], v); await save(`players/${p[0]}`, d); }
+    else if (kind === "player") { const d = playerDoc(p[0]); if (!d) return; if(p[1]==="team"){await doTransfer(p[0],v||null,0);return;} if (p[1] === "name" && !v) { toast("El nombre no puede quedar vacío."); return; } setPath(d, p[1], v); await save(`players/${p[0]}`, d); }
     else if (kind === "match") {
       const d = matchDoc(p[0]); if (!d) return; setPath(d, p[1], v);
       if (p[1] === "status" && v === "played") { if (d.ra == null) d.ra = 13; if (d.rb == null) d.rb = 0; }
@@ -3163,28 +3166,19 @@ async function adminClick(e) {
     else if (act === "stream") { S.adm.open = false; renderAdmin(); openStream(true); }
     else if (act === "m-open") { S.adm.openMatch = S.adm.openMatch === a[0] ? null : a[0]; renderAdmin(); }
     else if (act === "pteam") { S.adm.pTeam = a[0]; renderAdmin(); }
+    else if (act === "nuevo-en") {openManualMatch(+a[0]);}
     else if (act === "m-add") {
-      const f = +$("#nmF").value || 1, A = $("#nmA").value, B = $("#nmB").value, date = $("#nmDate").value, iv = S.adm.nmType !== "single";
-      if (A === B) { toast("Elegí dos equipos distintos."); return; }
-      const base = {fecha: f, status: "pending", ra: null, rb: null, ot: false, noShow: null, map: null, proj: null, mvp: null, stats: {}};
-      const id = newId("m");
-      if (!iv) { await save(`matches/${id}`, {...base, a: A, b: B, date, leg: null}); audit(`Creó el partido F${f}: ${R.teams[A].name} vs ${R.teams[B].name}`); toast("Partido agregado."); }
-      else {
-        const id2 = id + "v", date2 = ($("#nmDate2") || {}).value || "";
-        await save(`matches/${id}`, {...base, a: A, b: B, date, leg: "ida"});
-        await save(`matches/${id2}`, {...base, a: B, b: A, date: date2, leg: "vuelta"});
-        audit(`Creó la ida y vuelta F${f}: ${R.teams[A].name} vs ${R.teams[B].name}`); toast("Ida y vuelta agregadas: 2 partidos.");
-      }
-      S.adm.openMatch = id; renderAdminSoon();
-    }
-    else if (act === "fixture-gen") {
-      const iv = S.adm.nmType !== "single", base = {date: "", status: "pending", ra: null, rb: null, ot: false, noShow: null, map: null, proj: null, mvp: null, stats: {}};
-      const fd0 = roundRobin(TEAM_KEYS); let n = 0;
-      for (const [f, fd] of fd0.entries()) for (const [i, [A, B]] of fd.ms.entries()) {
-        await save(`matches/f${f + 1}m${i}`, {...base, fecha: f + 1, a: A, b: B, leg: iv ? "ida" : null}); n++;
-        if (iv) { await save(`matches/f${f + 1}m${i}v`, {...base, fecha: f + 1, a: B, b: A, leg: "vuelta"}); n++; }
-      }
-      toast(`Fixture creado: ${n} partidos en ${fd0.length} fechas${iv ? " (ida y vuelta)" : ""}.`); audit(`Generó el fixture todos contra todos${iv ? " ida y vuelta" : ""} (${n} partidos)`); renderAdminSoon();
+      const fecha=Number($("#nmF").value),A=$("#nmA").value,B=$("#nmB").value,iv=S.adm.nmType==="iv";
+      const rows=[{fecha,a:A,b:B,date:$("#nmDate").value,leg:iv?"ida":null}];
+      if(iv)rows.push({fecha,a:B,b:A,date:$("#nmDate2").value,leg:"vuelta"});
+      const signature=JSON.stringify(rows);
+      if(S.adm.manualSave?.signature!==signature) S.adm.manualSave={signature,key:newId("manual")};
+      b.disabled=true;
+      try {
+        const result=await api("/api/fixture",{mode:"manual",rows,key:S.adm.manualSave.key});
+        S.adm.manualSave=null;S.adm.manualFecha=fecha;S.adm.openMatch=result.ids[0];
+        audit("Agregó "+rows.length+" partido(s) a la fecha "+fecha);toast("Partido guardado en la fecha "+fecha+".");renderAdminSoon();
+      } finally {b.disabled=false;}
     }
     else if (act === "fx-open") { openFixtureGen(); }
     else if (act === "fecha-del") { await deleteFechas([+a[0]]); }
@@ -3225,12 +3219,9 @@ async function adminClick(e) {
       for (const k of TEAM_KEYS) { const t = teamDoc(k); if (t.captain === pid || t.sub === pid) { if (t.captain === pid) t.captain = null; if (t.sub === pid) t.sub = null; await save(`teams/${k}`, t); } }
       toast("Jugador borrado. Sus estadísticas en partidos quedan guardadas pero no se muestran."); renderAdminSoon(); }
     else if (act === "window-new") { if (!arm(b)) return; const d = cfgDoc(); d.windowId = (+d.windowId || 1) + 1; d.windowOpen = true; await save("league/config", d); toast("Ventana nueva abierta: el cupo de fichajes vuelve a cero."); audit(`Abrió la ventana de fichajes N° ${d.windowId}`); renderAdminSoon(); }
-    else if (act === "off-ok" || act === "off-no") {
-      const [uid, oid] = a, doc = clone(S.remote.offers[uid]); const o = doc && doc.items.find(x => x.id === oid); if (!o) return;
-      if (doc.team) o.team = doc.team;
-      if (act === "off-ok") { if (!R.players[o.pid]) return; await doTransfer(o.pid, o.team, o.amt); o.status = "ok"; o.note = "Pase aprobado"; }
-      else { o.status = "no"; o.note = "Rechazada por la organización"; }
-      await save(`offers/${uid}`, doc); audit(`${act === "off-ok" ? "Aprobó" : "Rechazó"} la oferta de ${R.teams[o.team].name} por ${(R.players[o.pid] || {}).name || "jugador borrado"} (${fmt(o.amt)} coins)`); renderAdminSoon();
+    else if (["off-ok","off-no","off-review","off-accept","off-cancel"].includes(act)) {
+      const [owner,key]=a;await api("/api/market",{owner,key,action:{"off-ok":"confirm","off-no":"reject","off-review":"review","off-accept":"accept","off-cancel":"cancel"}[act]});
+      toast("Estado del pase actualizado.");renderAdminSoon();
     }
     else if (act === "tr-manual") { const pid = $("#trP").value, to = $("#trTo").value || null, amt = +$("#trAmt").value || 0; if (!pid) return; if ((R.players[pid].team || null) === to) { toast("El jugador ya está en ese equipo."); return; } await doTransfer(pid, to, amt); renderAdminSoon(); }
     else if (act === "tr-del") { if (!arm(b)) return; const tr = S.remote.transfers[a[0]]; await save(`transfers/${a[0]}`, null, "del"); audit(`Borró el registro del fichaje de ${tr ? tr.name : "?"}`); renderAdminSoon(); }
@@ -3244,7 +3235,7 @@ async function adminClick(e) {
     else if (act === "ex-copy") { if (!arm(b)) return; await copyExample(); audit("Copió los datos de ejemplo a la liga"); renderAdminSoon(); }
     else if (act === "wipe-results") { if (!await dangerGate("Borrar todos los resultados", "<p>Todos los partidos vuelven a pendientes y se borran sus estadísticas.</p>")) return; for (const [id, m] of Object.entries(S.remote.matches)) await save(`matches/${id}`, {...clone(m), status: "pending", ra: null, rb: null, ot: false, noShow: null, map: null, mvp: null, stats: {}}); const d = cfgDoc(); d.credited = []; await save("league/config", d); toast("Resultados borrados."); audit("Borró todos los resultados y estadísticas"); renderAdminSoon(); }
     else if (act === "wipe-players") { if (!await dangerGate("Borrar todos los jugadores", "<p>Se borran todos los jugadores y los equipos quedan sin capitán ni subcapitán.</p>")) return; for (const id of Object.keys(S.remote.players)) await save(`players/${id}`, null, "del"); for (const k of TEAM_KEYS) { const t = teamDoc(k); t.captain = null; t.sub = null; await save(`teams/${k}`, t); } toast("Jugadores borrados."); audit("Borró todos los jugadores"); renderAdminSoon(); }
-    else if (act === "wipe-market") { if (!await dangerGate("Borrar ofertas y fichajes", "<p>Se borran todos los fichajes y se vacían las ofertas.</p>")) return; for (const id of Object.keys(S.remote.transfers)) await save(`transfers/${id}`, null, "del"); for (const id of Object.keys(S.remote.offers)) await save(`offers/${id}`, {items: []}); toast("Ofertas y fichajes borrados."); audit("Borró todas las ofertas y fichajes"); renderAdminSoon(); }
+    else if (act === "wipe-market") { if (!await dangerGate("Borrar ofertas y fichajes", "<p>Se borran todos los fichajes y se vacían las ofertas.</p>")) return; for (const id of Object.keys(S.remote.transfers)) await save(`transfers/${id}`, null, "del"); for (const id of Object.keys(S.remote.offers)) await save(`offers/${id}`, null, "del"); toast("Ofertas y fichajes borrados."); audit("Borró todas las ofertas y fichajes"); renderAdminSoon(); }
   } catch (er) { if (er && er.message && !er.code) toast(er.message); }
 }
 async function reviewRequest(id, ok) {
@@ -3273,13 +3264,10 @@ async function reviewRequest(id, ok) {
   toast(ok ? "Solicitud aprobada." : "Solicitud rechazada.", r.team);
 }
 async function doTransfer(pid, to, amt) {
-  const R = RM(), p = clone(S.remote.players[pid]), from = p.team || null; to = to || null;
-  p.team = to; await save(`players/${pid}`, p);
-  if (to && amt) { const t = teamDoc(to); t.coins = (+t.coins || 0) - amt; await save(`teams/${to}`, t); }
-  if (from) { const f = teamDoc(from); if (amt) f.coins = (+f.coins || 0) + amt; if (f.captain === pid) f.captain = null; if (f.sub === pid) f.sub = null; await save(`teams/${from}`, f); }
-  await save(`transfers/${newId("t")}`, {pid, name: p.name, from, to, amt, at: Date.now(), win: R.cfg.windowId});
-  audit(`Pase: ${p.name} de ${from ? R.teams[from].name : "agente libre"} a ${to ? R.teams[to].name : "agente libre"} por ${fmt(amt)} coins`);
-  toast(`Pase hecho: ${p.name} → ${to ? R.teams[to].name : "agente libre"}`, to || from); if (to) confetti([R.teams[to].c, R.teams[to].l, "#ffcb52"]);
+  const p=S.remote.players[pid];
+  if(!p)return;
+  await api("/api/market",{action:"manual",key:newId("manual"),pid,to,amt,from:p.team||null,version:p.marketVersion||0});
+  toast("Plantel actualizado.");
 }
 async function copyExample() {
   const E = example(); let n = 0; toast("Copiando datos de ejemplo…");
@@ -4840,7 +4828,7 @@ function renderPartidos() {
       <span class="px-t r ${won === "b" ? "win" : won ? "lose" : ""}"><b>${esc(TM(g.b).name)}</b>${img(g.b)}</span>
       <small>${g.status === "played" ? `${g.map ? esc(g.map) + " · " : ""}${g.noShow ? "W.O." : g.ot ? "Prórroga" : "Final"}` : g.date ? fmtDate(g.date) : "A confirmar"}</small></button>`; }).join("")}</div>`;
   root.innerHTML = fs.map(f => { const gs = cruceGroups(list.filter(m => m.fecha === f)), anyP = D.played.some(m => m.fecha === f), d = list.find(m => m.fecha === f && m.date);
-    return `<section class="px-f"><header><h3>Fecha ${f}</h3><span class="muted">${d ? fmtDate(d.date, false) : ""}</span><span class="sp"></span>${isUltra() ? `<button class="btn sm ghost px-del" data-px-del="${f}">Borrar fecha</button>` : ""}${anyP ? `<button class="btn sm ghost" data-round-recap="${f}">Copiar resumen</button><button class="btn sm ghost" data-px-img="${f}">${ico("i-image")}<span>Imagen de la fecha</span></button>` : ""}</header><div class="px-list">${gs.map(card).join("")}</div></section>`; }).join("")
+    return `<section class="px-f"><header><h3>Fecha ${f}</h3><span class="muted">${d ? fmtDate(d.date, false) : ""}</span><span class="sp"></span>${isUltra() ? `<button class="btn sm ghost" data-px-new="${f}">Agregar partido</button><button class="btn sm ghost px-del" data-px-del="${f}">Borrar fecha</button>` : ""}${anyP ? `<button class="btn sm ghost" data-round-recap="${f}">Copiar resumen</button><button class="btn sm ghost" data-px-img="${f}">${ico("i-image")}<span>Imagen de la fecha</span></button>` : ""}</header><div class="px-list">${gs.map(card).join("")}</div></section>`; }).join("")
     || `<p class="empty">${matches.length ? "No hay partidos con esos filtros." : "Todavía no hay fixture."}</p>`;
 }
 $("#pxRoot") && $("#pxRoot").addEventListener("click", e => {
@@ -4855,6 +4843,7 @@ $("#pxRoot") && $("#pxRoot").addEventListener("click", e => {
     return;
   }
   const im = e.target.closest("[data-px-img]"); if (im) shareImage("fecha", {f: +im.dataset.pxImg});
+  const create = e.target.closest("[data-px-new]"); if(create) openManualMatch(+create.dataset.pxNew);
   const dl = e.target.closest("[data-px-del]"); if (dl) deleteFechas([+dl.dataset.pxDel]);
 });
 $("#pxTeam") && $("#pxTeam").addEventListener("change", e => { S.px.team = e.target.value; renderPartidos(); });
@@ -5281,12 +5270,15 @@ function circle(keys) {
   for (let r = 0; r < n - 1; r++) {
     const ms = []; let bye = null;
     for (let i = 0; i < n / 2; i++) { const x = a[i], y = a[n - 1 - i];
-      if (x === null) bye = y; else if (y === null) bye = x; else ms.push((i === 0 ? r % 2 : i % 2) ? [y, x] : [x, y]); }
+      if (x === null) bye = y; else if (y === null) bye = x; else {
+        const size=keys.length,first=keys.indexOf(x),second=keys.indexOf(y),distance=(second-first+size)%size;
+        ms.push(distance<size/2 || (distance===size/2 && first<second) ? [x,y] : [y,x]);
+      } }
     out.push({ms, bye}); a.splice(1, 0, a.pop());
   }
   return out;
 }
-function planSeason(keys, rounds = 2) {
+function planSeason(keys, rounds = 2, previous = null) {
   if (keys.length < 2) return [];
   const base = circle(shuffled(keys));
   const out = [];
@@ -5294,25 +5286,39 @@ function planSeason(keys, rounds = 2) {
     const flip = r % 2 === 1;
     let order = shuffled(base.map((_, i) => i));
     // que el primer cruce de esta vuelta no sea uno de la última fecha de la anterior
-    const last = out.length ? new Set(out[out.length - 1].ms.map(([a, b]) => pairKey(a, b))) : null;
-    for (let t = 0; t < 300 && last && base[order[0]].ms.some(([a, b]) => last.has(pairKey(a, b))); t++) order = shuffled(order);
+    const last=out.at(-1) || previous;
+    if(last){
+      const pairs=new Set(last.ms.map(([a,b])=>pairKey(a,b)));
+      const cost=i=>base[i].ms.filter(([a,b])=>pairs.has(pairKey(a,b))).length*2 + Number(!!last.bye && last.bye===base[i].bye);
+      const best=order.reduce((a,b)=>cost(a)<=cost(b)?a:b);
+      order=[best,...order.filter(i=>i!==best)];
+    }
     order.forEach(i => out.push({ms: base[i].ms.map(([a, b]) => flip ? [b, a] : [a, b]), bye: base[i].bye, round: r + 1}));
   }
   return out;
 }
 // Días y horas: primera fecha + días entre fechas; dentro de la fecha, un partido cada "gap" minutos
-function planDates(plan, {start, hour, gap, every, legs}) {
+function planDates(plan, {start, hour, gap, every, legs, parallel=1}) {
   if (!start) return plan.map(fd => fd.ms.map(() => legs ? ["", ""] : [""]));
   const [y, mo, d] = start.split("-").map(Number), [h, mi] = (hour || "21:00").split(":").map(Number);
   const iso = t => { const x = new Date(t); return `${x.getUTCFullYear()}-${String(x.getUTCMonth() + 1).padStart(2, "0")}-${String(x.getUTCDate()).padStart(2, "0")}T${String(x.getUTCHours()).padStart(2, "0")}:${String(x.getUTCMinutes()).padStart(2, "0")}`; };
-  return plan.map((fd, f) => { const t0 = Date.UTC(y, mo - 1, d + f * (every || 7), h || 0, mi || 0); let k = 0;
-    return fd.ms.map(() => legs ? [iso(t0 + (k++) * gap * 60000), iso(t0 + (k++) * gap * 60000)] : [iso(t0 + (k++) * gap * 60000)]); });
+  return plan.map((fd, f) => { const t0 = Date.UTC(y, mo - 1, d + f * (every || 7), h || 0, mi || 0);
+    return fd.ms.map((_,i)=>{
+      const slot=Math.floor(i/parallel)*(legs?2:1),kick=t0+slot*gap*60000;
+      return legs?[iso(kick),iso(kick+gap*60000)]:[iso(kick)];
+    }); });
+
 }
-S.fx = {rounds: 2, legs: false, start: "", hour: "21:00", gap: 90, every: 7, plan: null};
+S.fx = {rounds: 2, legs: false, start: "", hour: "21:00", gap: 90, every: 7, parallel:1, plan: null};
 function openFixtureGen() {
   if (!isUltra()) { toast("Esto lo hace ultra staff."); return; }
-  const F = S.fx, from = (D.fechas || 0) + 1;
-  if (!F.plan || F.plan.keys !== TEAM_KEYS.join() || F.plan.rounds !== F.rounds) { F.plan = planSeason(TEAM_KEYS, F.rounds); F.plan.keys = TEAM_KEYS.join(); F.plan.rounds = F.rounds; }
+  const F=S.fx, matches=Object.values(S.remote.matches || {}),lastFecha=matches.reduce((max,m)=>Math.max(max,Number(m.fecha)||0),0),from=lastFecha+1;
+  const previous=matches.filter(m=>Number(m.fecha)===lastFecha).map(m=>[m.a,m.b]);
+  const seed=JSON.stringify([TEAM_KEYS,F.rounds,previous]);
+  if(!F.plan || F.plan.seed!==seed){
+    const absent=TEAM_KEYS.filter(k=>!previous.some(pair=>pair.includes(k)));
+    F.plan=planSeason(TEAM_KEYS,F.rounds,{ms:previous,bye:absent.length===1?absent[0]:null});F.plan.seed=seed;
+  }
   const P = F.plan, dates = planDates(P, F), per = P[0] ? P[0].ms.length : 0, total = P.reduce((s, fd) => s + fd.ms.length, 0) * (F.legs ? 2 : 1);
   const vs = (a, b) => `<span class="fx-m">${img(a)}<b>${esc(TM(a).name)}</b><i>vs</i><b>${esc(TM(b).name)}</b>${img(b)}</span>`;
   modal(`<div class="box cut fx-box"><div class="bh"><div><div class="eyebrow">Ultra staff · Partidos</div><h3>Generar la temporada</h3><div class="muted" style="font-size:14px">Todos contra todos, sorteado y parejo para los ${TEAM_KEYS.length} equipos.</div></div><button class="x" data-close aria-label="Cerrar">×</button></div>
@@ -5322,33 +5328,31 @@ function openFixtureGen() {
         ${fld("Cada cruce", `<select id="fxL">${opt("0", "Partido único", !F.legs)}${opt("1", "Ida y vuelta en la misma fecha", F.legs)}</select>`)}
         ${fld("Día de la primera fecha", `<input id="fxS" type="date" value="${esc(F.start)}">`)}
         ${fld("Hora del primer partido", `<input id="fxH" type="time" value="${esc(F.hour)}">`)}
+        ${fld("Cruces en simultáneo", `<select id="fxParallel">${Array.from({length:Math.max(per,1)},(_,i)=>opt(i+1,i+1,i+1===F.parallel)).join("")}</select>`)}
         ${fld("Minutos entre partidos", `<input id="fxG" type="number" min="15" max="600" step="15" value="${F.gap}">`)}
         ${fld("Días entre fechas", `<input id="fxE" type="number" min="1" max="60" value="${F.every}">`)}</div>
-      <p class="adm-note">Se crean <b>${P.length} fechas</b> (de la ${from} a la ${from + P.length - 1}) con <b>${total} partidos</b>: ${per} cruce${per === 1 ? "" : "s"} por fecha${TEAM_KEYS.length % 2 ? ", y cada equipo descansa una fecha por vuelta" : ""}. En cada vuelta se invierte quién es local y un mismo cruce nunca se repite en fechas seguidas.${F.start ? "" : " Sin día, los partidos quedan “a confirmar” y se completan después."}${D.fechas ? ` Ya hay ${D.fechas} fecha${D.fechas === 1 ? "" : "s"} cargada${D.fechas === 1 ? "" : "s"}: las nuevas van a continuación.` : ""}</p>
-      <div class="fx-prev">${P.map((fd, i) => `<div class="fx-f"><header><b>Fecha ${from + i}</b><small>${F.rounds > 1 ? `Vuelta ${fd.round}` : ""}${dates[i][0] && dates[i][0][0] ? " · " + fmtDate(dates[i][0][0], false) : ""}</small></header>${fd.ms.map(([a, b]) => vs(a, b)).join("")}${fd.bye ? `<span class="fx-bye">Libre: ${esc(TM(fd.bye).name)}</span>` : ""}</div>`).join("")}</div>
+      <p class="adm-note">Se crean <b>${P.length} fechas</b> (de la ${from} a la ${from + P.length - 1}) con <b>${total} partidos</b>: ${per} cruce${per === 1 ? "" : "s"} por fecha${TEAM_KEYS.length % 2 ? ", y cada equipo descansa una fecha por vuelta" : ""}. En cada vuelta se invierte quién es local y se evitan revanchas consecutivas cuando hay otro rival disponible.${F.start ? "" : " Sin día, los partidos quedan “a confirmar” y se completan después."}${D.fechas ? ` Ya hay ${D.fechas} fecha${D.fechas === 1 ? "" : "s"} cargada${D.fechas === 1 ? "" : "s"}: las nuevas van a continuación.` : ""}</p>
+      <div class="fx-prev">${P.map((fd, i) => `<div class="fx-f"><header><b>Fecha ${from + i}</b><small>${F.rounds > 1 ? `Vuelta ${fd.round}` : ""}${dates[i][0] && dates[i][0][0] ? " · " + fmtDate(dates[i][0][0], false) : ""}</small></header>${fd.ms.map(([a, b],j) => vs(a,b)+(dates[i][j][0]?`<small>${dates[i][j].map(t=>esc(t.replace("T"," "))).join(" / ")} ART</small>`:"")).join("")}${fd.bye ? `<span class="fx-bye">Libre: ${esc(TM(fd.bye).name)}</span>` : ""}</div>`).join("")}</div>
       <div class="rowbtns"><button class="btn gold" id="fxGo" type="button">Crear ${P.length} fechas</button><button class="btn" id="fxAgain" type="button">${ico("i-swap")}<span>Sortear de nuevo</span></button><button class="btn ghost" type="button" data-close>Cancelar</button></div></div></div>`);
-  const read = () => { F.rounds = +$("#fxR").value || 2; F.legs = $("#fxL").value === "1"; F.start = $("#fxS").value; F.hour = $("#fxH").value || "21:00"; F.gap = Math.max(15, +$("#fxG").value || 90); F.every = Math.max(1, +$("#fxE").value || 7); };
+  const read = () => { F.rounds = +$("#fxR").value || 2; F.legs = $("#fxL").value === "1"; F.start = $("#fxS").value; F.hour = $("#fxH").value || "21:00"; F.parallel=+$("#fxParallel").value || 1; F.gap = Math.min(600,Math.max(15,+$("#fxG").value || 90)); F.every = Math.max(1, +$("#fxE").value || 7); };
   $(".fx-box").addEventListener("change", e => { if (e.target.matches("select, input")) { read(); openFixtureGen(); } });
   $("#fxAgain").addEventListener("click", () => { read(); F.plan = null; openFixtureGen(); });
-  $("#fxGo").addEventListener("click", async () => { read(); const b = $("#fxGo"); b.disabled = true; b.textContent = "Creando…"; await createSeason(); });
+  $("#fxGo").addEventListener("click", async () => { read(); const b = $("#fxGo"); b.disabled = true; b.textContent = "Creando…"; await createSeason(from); });
 }
-async function createSeason() {
-  const F = S.fx, P = F.plan, from = (D.fechas || 0) + 1, dates = planDates(P, F), base = {status: "pending", ra: null, rb: null, ot: false, noShow: null, map: null, proj: null, mvp: null, stats: {}};
-  const taken = new Set(Object.keys(S.remote.matches || {})), idFor = (f, i, v) => { const id = `f${f}m${i}${v ? "v" : ""}`; return taken.has(id) ? newId("m") : id; };
-  let n = 0;
+async function createSeason(from) {
+  const F=S.fx,dates=planDates(F.plan,F),rows=[];
+  F.plan.forEach((round,i)=>round.ms.forEach(([a,b],j)=>{
+    const fecha=from+i;
+    rows.push({fecha,a,b,date:dates[i][j][0],leg:F.legs?"ida":null});
+    if(F.legs)rows.push({fecha,a:b,b:a,date:dates[i][j][1],leg:"vuelta"});
+  }));
+  const signature=JSON.stringify(rows);
+  if(F.save?.signature!==signature)F.save={signature,key:newId("season")};
   try {
-    for (const [j, fd] of P.entries()) {
-      const f = from + j;
-      for (const [i, [A, B]] of fd.ms.entries()) {
-        const id = idFor(f, i, false); taken.add(id);
-        await save(`matches/${id}`, {...base, fecha: f, a: A, b: B, date: dates[j][i][0] || "", leg: F.legs ? "ida" : null}); n++;
-        if (F.legs) { const id2 = taken.has(id + "v") ? newId("m") : id + "v"; taken.add(id2); await save(`matches/${id2}`, {...base, fecha: f, a: B, b: A, date: dates[j][i][1] || "", leg: "vuelta"}); n++; }
-      }
-    }
-  } catch (er) { toast(`Se cortó después de ${n} partidos: ${er.message || "error al guardar"}. Revisá y borrá lo que sobre.`); renderAdminSoon(); return; }
-  closeModal(); F.plan = null;
-  audit(`Generó la temporada: ${P.length} fechas (de la ${from} a la ${from + P.length - 1}), ${n} partidos, todos contra todos ${F.rounds} ${F.rounds === 1 ? "vez" : "veces"}${F.legs ? " con ida y vuelta" : ""}`);
-  toast(`Listo: ${P.length} fechas y ${n} partidos creados.`); renderAdminSoon();
+    const {ids}=await api("/api/fixture",{mode:"auto",rows,key:F.save.key});
+    closeModal();F.plan=null;F.save=null;
+    audit("Generó "+ids.length+" partidos desde la fecha "+from);toast("Fixture guardado: "+ids.length+" partidos.");renderAdminSoon();
+  }catch(e){toast(e.message);const button=$("#fxGo");if(button){button.disabled=false;button.textContent="Volver a intentar";}}
 }
 // Borrar una fecha o todas: también se borran las elecciones de mapa de esas fechas y se saca la marca de coins acreditados
 async function deleteFechas(fs) {
@@ -5474,7 +5478,14 @@ document.addEventListener("click", async e => {
     if (!body.isConnected) return;
     const states = {pending:"Pendiente",approved:"Aprobada",rejected:"Rechazada"};
     if (staff) data.rows.sort((a,b)=>Number((b.status||"pending")==="pending")-Number((a.status||"pending")==="pending") || b.updated-a.updated);
-    const cards = data.rows.map(r=>`<article class="rec-card" data-state="${esc(r.status || "pending")}"><header><div><small>${esc(r.discord)} · ${esc(r.pais)}</small><h4>${esc(r.riot)}</h4></div><b>${esc(r.principal)}</b></header><dl>${detail("Rango actual",r.rango)}${detail("Peak elo",r.peak)}${detail("Rol secundario",r.secundario)}${detail("Abierto a otros roles",r.flex)}${detail("Agentes",r.agentes)}${detail("Disponibilidad",r.horarios)}${staff?detail("Por qué ficharlo",r.motivo)+detail("Se postula a capitán",r.capitan)+detail("Declara haber pagado US$ 2",r.pago)+detail("Dudas",r.dudas)+detail("Sugerencias",r.sugerencias):""}</dl>${staff?`<p><b data-decision-status>${states[r.status] || "Pendiente"}</b> · ${r.source==="web"?"Web":"Discord"}</p>${!r.status || r.status==="pending"?`<div class="rowbtns"><button class="btn sm gold" data-decision="approve" data-id="${esc(r.id)}">Aprobar y publicar · 1.500</button><button class="btn sm ghost" data-decision="reject" data-id="${esc(r.id)}">Rechazar</button></div>`:""}<div class="rowbtns"><strong data-payment-status>${r.paid?"Pagado":"Pago pendiente"}</strong><button type="button" class="btn sm ghost" data-payment="${esc(r.id)}" data-paid="${!!r.paid}">${r.paid?"Marcar pendiente":"Confirmar pago"}</button></div>` :`<strong>Agente libre · ${fmt(r.value)} ONYX Coins</strong>`}</article>`).join("");
+    const deliveryLabels={pending:"Pendiente",sending:"Enviando",sent:"Entregado",blocked:"Privados bloqueados",identity:"Falta verificar Discord",config:"Revisar canal y permisos",retry:"Reintento programado",expired:"Vencida"};
+    const deliveryLine=(r,kind)=>{
+      const state=kind==="receipt"?r.receiptState:r.inviteState;
+      if(kind==="invite" && (!r.paid || r.status!=="approved"))return "";
+      const retry=(state && state!=="sent" && state!=="joined" || kind==="invite" && !state);
+      return `<p data-delivery><b>${kind==="invite"?"Invitación":"Comprobante"}</b> · <span>${esc(({joined:"Jugador incorporado",expired:"Vencida"})[state] || deliveryLabels[state] || "Sin enviar")}</span> ${retry?`<button class="btn sm ghost" data-redeliver="${kind}" data-id="${esc(r.id)}" data-legacy="${!r.discordId && !/^\d+$/.test(r.id)}">Reintentar envío</button>`:""}</p>`;
+    };
+    const cards = data.rows.map(r=>`<article class="rec-card" data-state="${esc(r.status || "pending")}"><header><div><small>${esc(r.discord)} · ${esc(r.pais)}</small><h4>${esc(r.riot)}</h4></div><b>${esc(r.principal)}</b></header><dl>${detail("Rango actual",r.rango)}${detail("Peak elo",r.peak)}${detail("Rol secundario",r.secundario)}${detail("Abierto a otros roles",r.flex)}${detail("Agentes",r.agentes)}${detail("Disponibilidad",r.horarios)}${staff?detail("Por qué ficharlo",r.motivo)+detail("Se postula a capitán",r.capitan)+detail(r.feeCurrency==="ARS"?"Declara haber pagado la inscripción":"Declaración anterior (US$ 2)",r.pago)+detail("Dudas",r.dudas)+detail("Sugerencias",r.sugerencias):""}</dl>${staff?`<p><b data-decision-status>${states[r.status] || "Pendiente"}</b> · ${r.source==="web"?"Web":"Discord"}</p>${deliveryLine(r,"invite")}${deliveryLine(r,"receipt")}${!r.status || r.status==="pending"?`<div class="rowbtns"><button class="btn sm gold" data-decision="approve" data-id="${esc(r.id)}">Aceptar postulación</button><button class="btn sm ghost" data-decision="reject" data-id="${esc(r.id)}">Rechazar</button></div>`:""}<div class="rowbtns">${r.receiptMessage && /^\d+$/.test(r.receiptMessage) && /^\d+$/.test(r.receiptChannel)?`<a class="btn sm" target="_blank" rel="noopener" href="https://discord.com/channels/1550607388267122788/${r.receiptChannel}/${r.receiptMessage}">Abrir comprobante en Discord</a>`:""}${isUltra() && r.id.startsWith("web_") && !r.discordId?`<button class="btn sm" data-bind-legacy="${esc(r.id)}">Vincular Discord anterior</button>`:""}<strong data-payment-status>${esc(r.accessState==="joined"?"Jugador incorporado":r.paid?"Pago verificado":({pending:"Pago pendiente",submitted:"Comprobante enviado",review:"Pago en revisión",rejected:"Pago rechazado"})[r.paymentState]||"Pendiente")} · ${esc(r.method||"")}</strong>${r.status==="approved" && !r.paid && r.receiptState==="sent" && r.paymentState!=="rejected"?`<button class="btn sm" data-payment="${esc(r.id)}" data-hash="${esc(r.receiptHash||"")}" data-verify="yes">Verificar pago</button><button class="btn sm ghost" data-payment="${esc(r.id)}" data-hash="${esc(r.receiptHash||"")}" data-verify="no">Rechazar comprobante</button>`:""}</div>` :`<strong>Agente libre · ${fmt(r.value)} ONYX Coins</strong>`}</article>`).join("");
     body.innerHTML = `<div class="rec-filters"><label>Buscar jugador<input type="search" id="recSearch" placeholder="Discord, Riot ID, rol o rango"></label>${staff?'<label>Estado<select id="recState"><option value="">Todos</option><option value="pending">Pendientes</option><option value="approved">Aprobadas</option><option value="rejected">Rechazadas</option></select></label>':'<a class="btn" href="postular.html">Postularme</a>'}</div>` + cards + '<p id="recEmpty" hidden>No hay fichas para esta búsqueda.</p>';
     const filter = () => {
       const q=$("#recSearch").value.trim().toLocaleLowerCase(), state=$("#recState")?.value || "";
@@ -5484,26 +5495,39 @@ document.addEventListener("click", async e => {
     };
     $("#recSearch").addEventListener("input",filter); $("#recState")?.addEventListener("change",filter); filter();
     if (staff) body.addEventListener("click",async ev=>{
+      const retry=ev.target.closest("[data-redeliver]");
+      if(retry && !retry.disabled){
+        const needsId=retry.dataset.legacy==="true" && retry.dataset.redeliver==="invite";
+        const discordId=needsId?window.prompt("ID numérico del Discord declarado por el jugador"):null;
+        if(needsId && !discordId)return;
+        retry.disabled=true;
+        try{const result=await api("/api/recruitment",{action:"retryDelivery",id:retry.dataset.id,kind:retry.dataset.redeliver,discordId});
+          retry.closest("[data-delivery]").querySelector("span").textContent=result.message;
+          if(result.state==="sent")retry.remove();else retry.dataset.legacy="false";
+        }catch(err){toast(err.message);}finally{retry.disabled=false;}return;
+      }
       const btn=ev.target.closest("[data-decision]"); if (!btn || btn.disabled) return;
       const bar=btn.parentElement, card=btn.closest(".rec-card"), approve=btn.dataset.decision==="approve";
       if (!approve && !window.confirm("¿Rechazar la solicitud de "+card.querySelector("h4").textContent+"?")) return;
       bar.querySelectorAll("button").forEach(b=>b.disabled=true);
       try {
-        await api("/api/recruitment",{action:btn.dataset.decision,id:btn.dataset.id});
+        const result=await api("/api/recruitment",{action:btn.dataset.decision,id:btn.dataset.id});
+        if(approve)bar.insertAdjacentHTML("beforebegin",deliveryLine({...data.rows.find(r=>r.id===btn.dataset.id),status:"approved",inviteState:result.inviteState},"invite"));
         applicationsCount.at=0; showApplicationsCount();
         card.dataset.state=approve?"approved":"rejected";
         card.querySelector("[data-decision-status]").textContent=states[card.dataset.state]; bar.remove(); filter();
-        toast(approve?"Jugador publicado en el mercado por 1.500 ONYX Coins.":"Solicitud rechazada.");
+        toast(approve?"Postulación aceptada. El jugador ya puede pagar.":"Solicitud rechazada.");
       } catch(err) {toast(err.message);bar.querySelectorAll("button").forEach(b=>b.disabled=false);}
     });
     if (staff) body.addEventListener("click",async ev=>{
       const btn = ev.target.closest("[data-payment]"); if (!btn || btn.disabled) return;
       btn.disabled = true;
       try {
-        const paid = btn.dataset.paid !== "true";
-        await api("/api/recruitment",{action:"payment",id:btn.dataset.payment,paid});
-        btn.dataset.paid = String(paid); btn.textContent = paid?"Marcar pendiente":"Confirmar pago";
-        btn.parentNode.querySelector("[data-payment-status]").textContent = paid?"Pagado":"Pago pendiente";
+        const paid=btn.dataset.verify==="yes";
+        await api("/api/recruitment",{action:"payment",id:btn.dataset.payment,hash:btn.dataset.hash,paid});
+        btn.parentNode.querySelector("[data-payment-status]").textContent=paid?"Pago verificado":"Pago rechazado";
+        btn.parentNode.querySelectorAll("[data-payment]").forEach(b=>b.remove());
+        toast(paid?"Pago verificado.":"Podrá enviar otro comprobante.");
       } catch (err) { toast(err.message); } finally { btn.disabled = false; }
     });
   } catch (err) { if (body.isConnected) body.textContent = err.message; }
@@ -5536,3 +5560,30 @@ initShell();
 initFirebase();
 finishDiscordLogin();
 })();
+
+document.addEventListener("click",async e=>{
+  if(!e.target.closest("[data-sync-panel]") || !isUltra())return;
+  async function show(){
+    const d=await api("/api/recruitment",{action:"operations"});
+    const when=t=>t?new Date(t).toLocaleString("es-AR"):"—";
+    const job=j=>`<p><strong>${esc(j.kind)} · ${esc(j.pid)}</strong> · ${esc(j.state)} ${esc(j.error||"")} ${j.roles?esc(j.roles.join(", ")):""} ${j.state!=="done" || j.kind==="roles"?`<button class="btn sm" data-job="${esc(j.id)}">Resincronizar</button>`:""}</p>`;
+    modal(`<div class="box cut"><div class="bh"><h3>Operaciones de Discord</h3><button class="x" data-close>×</button></div><div class="bb"><h4>Roles y anuncios</h4>${d.jobs.map(job).join("")||"Sin operaciones."}<h4>Historial de pagos</h4>${d.history.sort((a,b)=>b.at-a.at).map(h=>`<p>${esc(h.id)} · ${esc(h.decision)} · ${esc(h.method||"")} · ${esc(h.by)} · ${when(h.at)}</p>`).join("")||"Sin verificaciones."}<h4>Invitaciones</h4>${d.invites.map(i=>`<p>${esc(i.id)} · ${esc(i.state)} · Vence ${when(i.expires)}</p>`).join("")||"Sin invitaciones."}<h4>Errores de entrega</h4>${d.deliveryErrors.map(v=>`<p>${esc(v.id)} · ${esc(v.kind)} · ${esc(v.error)} · ${when(v.at)}</p>`).join("")||"Sin errores."}<h4>Historial de acceso</h4>${d.events.map(v=>`<p>${esc(v.id)} · ${esc(v.event)} · ${when(v.at)}</p>`).join("")}</div></div>`);
+    document.querySelectorAll("[data-job]").forEach(b=>b.onclick=async()=>{b.disabled=true;try{await api("/api/recruitment",{action:"retryJob",key:b.dataset.job});await show();}catch(err){toast(err.message);b.disabled=false;}});
+  }
+  try{await show();}catch(err){toast(err.message);}
+});
+
+document.addEventListener("click",async e=>{
+  const b=e.target.closest("[data-cancel-offer]");if(!b)return;b.disabled=true;
+  try{await api("/api/market",{action:"cancel",key:b.dataset.cancelOffer});toast("Oferta cancelada.");}
+  catch(err){toast(err.message);b.disabled=false;}
+});
+
+document.addEventListener("click",async e=>{
+  const b=e.target.closest("[data-bind-legacy]");if(!b || !isUltra())return;
+  const discordId=window.prompt("ID numérico de la cuenta de Discord que figura en esta encuesta");
+  if(!discordId)return;
+  b.disabled=true;
+  try{await api("/api/recruitment",{action:"bindLegacy",id:b.dataset.bindLegacy,discordId:discordId.trim()});b.remove();toast("Cuenta vinculada.");}
+  catch(err){toast(err.message);b.disabled=false;}
+});

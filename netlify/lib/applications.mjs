@@ -1,3 +1,5 @@
+import {queue} from "./community-sync.mjs";
+import { enqueue } from "./recruit-delivery.mjs";
 import { createHash } from "node:crypto";
 import { admin } from "./admin.mjs";
 import { fields, profile } from "./survey-fields.mjs";
@@ -24,17 +26,19 @@ export function readAnswers(input) {
   return row;
 }
 
-export async function submitApplication(db, row, discordId) {
+export async function submitApplication(db, row, discordId, {source=discordId?"discord":"web",receipt=null}={}) {
   const id = discordId || "web_"+digest(row.riot);
   const ref = db.doc("recruits/"+id);
   await db.runTransaction(async tx=>{
     const previous = (await tx.get(ref)).data();
     if (previous?.status === "approved") fail(409,"La ficha ya fue aprobada. Pedile al staff cualquier cambio.");
     // Un formulario anónimo nunca puede editar la solicitud de otra persona.
-    if (previous && !discordId) fail(409,"Ya recibimos una solicitud para ese Riot ID. Contactá al staff para corregirla.");
+    if (previous && source==="web") fail(409,"Ya recibimos una solicitud para ese Riot ID. Contactá al staff para corregirla.");
     const now = Date.now();
-    tx.set(ref,{...row,status:"pending",source:discordId?"discord":"web",updated:now,created:previous?.created || now},{merge:true});
+    if(receipt)fail(409,"Esperá la aceptación de tu solicitud.");
+    tx.set(ref,{...row,feeCurrency:"ARS",feeAmount:3000,...(discordId?{discordId}:{}),...(receipt?{receiptState:"pending",receiptCount:1}:{}),status:"pending",source,updated:now,created:previous?.created || now},{merge:true});
   });
+  return id;
 }
 
 export async function decideApplication(db,id,action,staff) {
@@ -43,7 +47,33 @@ export async function decideApplication(db,id,action,staff) {
   return db.runTransaction(async tx=>{
     const row = (await tx.get(ref)).data();
     if (!row) fail(404,"La solicitud ya no existe.");
-    if (row.status === "approved" && action === "approve") return row.pid;
+    if(action==="verify" || action==="denyReceipt"){
+      if(!staff.staff || row.status!=="approved")fail(409,"Primero aceptá la solicitud.");
+      if(row.paid && action==="verify")return row.pid;
+      const job=(await tx.get(db.doc("recruitjobs/receipt_"+id))).data();
+      if(row.paid || row.receiptState!=="sent" || !job?.hash || job.hash!==staff.receiptHash || row.paymentState==="rejected")fail(409,"Recargá el comprobante vigente antes de decidir.");
+      const history=db.collection("paymenthistory").doc();
+      if(action==="denyReceipt"){
+        tx.update(ref,{paid:false,paymentState:"rejected"});
+        tx.set(history,{id,hash:job.hash,method:row.method||null,decision:"rejected",by:staff.uid,at:Date.now()});return null;
+      }
+      const recipient=row.discordId || (/^\d+$/.test(id)?id:null);
+      if(!recipient)fail(409,"Vinculá el Discord antes de verificar.");
+      const riot=splitRiot(row.riot),pid=row.pid || "p_"+digest(row.riot);
+      const player=(await tx.get(db.doc("players/"+pid))).data();
+      const players=await tx.get(db.collection("players"));
+      if(players.docs.some(d=>d.id!==pid && (norm(d.data().ign)===norm(row.riot)||d.data().discord===recipient)))fail(409,"Ya existe una ficha con esa identidad.");
+      if(player && row.pid!==pid)fail(409,"Ya existe ese jugador.");
+      if(!player)tx.set(db.doc("players/"+pid),{name:riot.name,ign:row.riot,team:null,rank:row.rango,role:["Duelista","Iniciador","Controlador","Centinela","Flex","Suplente"].find(v=>norm(v)===norm(row.principal))||"Flex",value:baseValue,clause:0,recruitment:profile(row),discord:recipient,recruitId:id});
+      else tx.update(db.doc("players/"+pid),{recruitId:id,discord:recipient,marketEligible:true});
+      tx.set(history,{id,hash:job.hash,method:row.method||null,decision:"verified",by:staff.uid,at:Date.now()});
+      tx.update(ref,{pid,paid:true,flowVersion:2,paymentState:"verified",verifiedBy:staff.u,verifiedAt:Date.now(),inviteState:"pending"});
+      enqueue(tx,db,"invite",id,recipient);
+      queue(tx,db,"roles_"+pid,"roles",{rid:id,pid});
+      if(!player?.team)queue(tx,db,"free_"+pid,"free",{rid:id,pid,version:player?.marketVersion||0});
+      tx.set(db.doc("pubqueue/main"),{paths:admin.firestore.FieldValue.arrayUnion("players/"+pid),at:Date.now()},{merge:true});return pid;
+    }
+    if (row.status === "approved" && action === "approve") return row.pid || null;
     if (row.status && row.status!=="pending") fail(409,"Otro administrador ya resolvió la solicitud.");
     const review = {reviewedAt:Date.now(),reviewedBy:staff.uid};
     if (action==="reject") { tx.update(ref,{...review,status:"rejected"}); return null; }
@@ -53,12 +83,8 @@ export async function decideApplication(db,id,action,staff) {
     if (players.docs.some(d=>d.id===pid || norm(d.data().ign)===norm(row.riot) ||
       (d.data().recruitment?.discord && norm(d.data().recruitment.discord).replace(/^@/,"")===norm(row.discord).replace(/^@/,"")) ||
       (d.data().discord && [norm(id),norm(row.discord).replace(/^@/,"")].includes(norm(d.data().discord).replace(/^@/,""))))) fail(409,"Ya existe un jugador con esa identidad. Revisá su ficha en Jugadores.");
-    const role = ["Duelista","Iniciador","Controlador","Centinela","Flex","Suplente"].find(x=>norm(x)===norm(row.principal)) || "Flex";
-    tx.set(db.doc("players/"+pid),{name:riot.name,ign:row.riot,team:null,role,rank:row.rango,value:baseValue,clause:0,
-      recruitment:profile(row),...(/^\d+$/.test(id)?{discord:id}:{})});
-    tx.update(ref,{...review,status:"approved",pid});
-    tx.set(db.doc("pubqueue/main"),{paths:admin.firestore.FieldValue.arrayUnion("players/"+pid),at:review.reviewedAt},{merge:true});
-    tx.set(db.collection("audit").doc(),{at:review.reviewedAt,uid:staff.uid,u:staff.u,role:staff.role,txt:"Aprobó a "+row.riot+" como agente libre por 1.500 ONYX Coins."});
-    return pid;
+    tx.update(ref,{...review,status:"approved",flowVersion:2,paymentState:"pending"});
+    tx.set(db.collection("audit").doc(),{at:Date.now(),uid:staff.uid,u:staff.u,role:staff.role,txt:"Aceptó la postulación de "+row.riot});
+    return null;
   });
 }

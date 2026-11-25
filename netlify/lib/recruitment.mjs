@@ -17,17 +17,18 @@ export async function survey(i) {
         || await api("POST","/guilds/"+i.guild_id+"/channels",{name:"postulaciones-onyx",type:0,topic:"Encuestas de fichajes ONYX · Completá /postular"});
       channel = target.id;
     }
-    const message = {content:"**Postulaciones ONYX**\nUsá **/postular** en este canal y completá la encuesta. Tu usuario de Discord se toma de tu cuenta. En la web se muestran tu Riot ID, rangos, roles, agentes, disponibilidad y país. El staff recibe el resto y verifica el pago por separado. El staff revisa tu postulación. Al aprobarla, entrás al mercado libre por 1.500 ONYX Coins.\n\n"+fields.map(([,label])=>"• "+label).join("\n"),allowed_mentions:{parse:[]}};
+    const message = {content:"**Postulaciones ONYX**\nUsá **/postular** en este canal y completá la encuesta. Tu usuario de Discord se toma de tu cuenta. En la web se muestran tu Riot ID, rangos, roles, agentes, disponibilidad y país. El staff recibe el resto y verifica el pago por separado. El staff revisa tu postulación. Al verificar el pago, entrás al mercado libre por 1.500 ONYX Coins.\nMercado Pago: $3.000 ARS · Alias abril.pilla · También aceptamos PayPal · "+env().site+"/pagar\n\n"+fields.map(([,label])=>"• "+label).join("\n"),allowed_mentions:{parse:[]}};
     if (channel !== i.channel_id) await sendMessage(channel,message);
-    await config.set({channel});
+    const receipts=i.data.options?.find(o=>o.name==="canal_comprobantes")?.value;
+    await config.set({channel,...(receipts?{receipts}:{})},{merge:true});
     return channel === i.channel_id ? message : quiet("Encuesta publicada en <#"+channel+">.");
   }
   if ((await config.get()).data()?.channel !== i.channel_id) return quiet("Usá el canal de postulaciones habilitado por el staff.");
   const options = Object.fromEntries((i.data.options || []).map(o=>[o.name,String(o.value).trim()]));
   if (!/^[^#\r\n]+#[^#\s]+$/.test(options.riot || "")) return quiet("Revisá tu Riot ID e incluí el #tag.");
-  const record = Object.fromEntries(fields.map(([key])=>[key,(options[key] || "").slice(0,key==="motivo"?600:220)]));
+  const record = Object.fromEntries(fields.map(([key])=>[key,(options[key] || (key==="pago"?"No":"")).slice(0,key==="motivo"?600:220)]));
   try { await submitApplication(db,readAnswers({...record,discord:i.member.user.username}),i.member.user.id); }
   catch (err) { if (err.status) return quiet(err.message); throw err; }
-  return quiet("Tu solicitud está pendiente de revisión por el staff. Al aprobarla entrás al mercado como agente libre.");
+  return quiet("Tu solicitud está pendiente de revisión por el staff. Al aceptarla se habilita el pago. Cuando lo verifiquemos entrás al mercado. Para subir tu comprobante, conectá este Discord en "+env().site+"/postular.html.");
 }
 

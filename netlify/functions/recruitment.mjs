@@ -4,6 +4,10 @@ import { env, api } from "../lib/discord.mjs";
 import { signupLimit } from "../lib/coaching.mjs";
 import { patchSnapshot } from "../lib/publish.mjs";
 import { decideApplication, readAnswers, submitApplication, validId } from "../lib/applications.mjs";
+import {handler as checkout} from "./inscripcion-pago.mjs";
+import {work} from "../lib/community-sync.mjs";
+import { identity } from "../lib/recruit-id.mjs";
+import { deliver,enqueue,receiptFile,saveReceipt,labels } from "../lib/recruit-delivery.mjs";
 import { profile } from "../lib/survey-fields.mjs";
 
 const snowflake = id => /^\d{15,22}$/.test(id || "");
@@ -28,29 +32,100 @@ export function rosterReview(members, players, links, teams) {
 export default async function(req) {
   try {
     const db = initAdmin().firestore();
+    const user=identity(req);
+    if(req.method==="GET" && new URL(req.url).searchParams.has("identity")){
+      if(!user)return json(200,{user:null});
+      const own=await db.doc("recruits/"+user.id).get();
+      const legacy=own.exists?null:await db.collection("recruits").where("discordId","==",user.id).limit(1).get();
+      const record=own.exists?own:legacy?.docs[0],r=record?.data();
+      const job=r?(await db.doc("recruitjobs/invite_"+record.id).get()).data():null;
+      return json(200,{paymentOptions:r?.status==="approved" && !r.paid?{paypal:"https://paypal.me/zerinhoprogamer2005"}:null,user:{username:user.username},application:r?{id:record.id,status:r.status||"pending",riot:r.riot,receipt:r.receiptState,paymentState:r.paymentState,access:r.accessState,paid:!!r.paid}:null,
+        invite:r?.paid && r.status==="approved" && !r.joinedAt && job?.code && job.recipient===user.id && job.expires>Date.now()?"https://discord.gg/"+encodeURIComponent(job.code):null});
+    }
     if (req.method === "GET") {
       const list = await db.collection("players").where("team","==",null).get();
-      return json(200,{rows:list.docs.map(d=>d.data()).filter(p=>p.recruitment && !p.team).map(p=>({...profile({...p.recruitment,riot:p.ign || p.recruitment.riot,rango:p.rank || p.recruitment.rango,principal:p.role || p.recruitment.principal}),value:p.value ?? 1500}))},{"cache-control":"public, max-age=30"});
+      return json(200,{rows:list.docs.map(d=>d.data()).filter(p=>p.recruitment && !p.team && p.marketEligible!==false).map(p=>({...profile({...p.recruitment,riot:p.ign || p.recruitment.riot,rango:p.rank || p.recruitment.rango,principal:p.role || p.recruitment.principal}),value:p.value ?? 1500}))},{"cache-control":"public, max-age=30"});
     }
     if (req.method !== "POST") return json(405,{error:"Método no permitido."});
-    const body = await readBody(req,12000);
+    const body = await readBody(req,925000);
+    if(body?.action==="checkout"){
+      if(!user)return json(403,{error:"Conectá Discord."});
+      const own=await db.doc("recruits/"+user.id).get();
+      const r=own.exists?own.data():(await db.collection("recruits").where("discordId","==",user.id).limit(1).get()).docs[0]?.data();
+      if(!r || r.status!=="approved" || r.paid)return json(403,{error:"El pago requiere una postulación aceptada y pendiente de pago."});
+      return checkout(req);
+    }
+    if(body?.action==="receipt"){
+      if(!user || !validId(body.id))return json(403,{error:"Conectá tu cuenta de Discord."});
+      const state=await saveReceipt(db,body.id,user,receiptFile(body.receipt),body.method);
+      const receiptState=state==="sent"?state:await deliver(db,"receipt",body.id);
+      return json(200,{ok:true,receiptState});
+    }
     if (body?.action === "apply") {
-      const row = readAnswers(body.answers);
+      const row = readAnswers({...body.answers,...(user?{discord:user.username}:{})});
+      if(!user)return json(401,{error:"Conectá tu Discord para recibir la invitación."});
+      if(body.receipt)return json(409,{error:"Esperá la aceptación de la solicitud."});
+      const receipt=null;
       const ip = req.headers.get("x-nf-client-connection-ip") || "local";
       if (!await signupLimit(db,"application:"+ip,Date.now())) return json(429,{error:"Alcanzaste el límite diario de solicitudes."});
-      await submitApplication(db,row);
-      return json(201,{status:"pending"});
+      const id=await submitApplication(db,row,user.id,{source:"web",receipt});
+      const receiptState=receipt?await deliver(db,"receipt",id):null;
+      return json(201,{status:"pending",id,receiptState});
     }
     const me = await whoIs(req,initAdmin());
     if (!me?.staff) return json(403,{error:"Solo staff."});
+    if(body.action==="bindLegacy"){
+      if(!me.ultra || !validId(body.id) || !body.id.startsWith("web_") || !snowflake(body.discordId))return json(403,{error:"Vinculación reservada al ultra admin."});
+      const account=await api("GET","/users/"+body.discordId);
+      const ref=db.doc("recruits/"+body.id);
+      await db.runTransaction(async tx=>{
+        const [rec,byId,byLink]=await Promise.all([tx.get(ref),tx.get(db.doc("recruits/"+body.discordId)),tx.get(db.collection("recruits").where("discordId","==",body.discordId))]);
+        const row=rec.data();
+        if(!row || row.discordId || byId.exists || !byLink.empty || account.username.toLowerCase()!==String(row.discord).replace(/^@/,"").toLowerCase())throw Object.assign(new Error("Hay otra ficha o el usuario de Discord no coincide."),{status:409});
+        tx.update(ref,{discordId:body.discordId,linkedBy:me.uid,linkedAt:Date.now()});
+        tx.set(db.collection("audit").doc(),{uid:me.uid,u:me.u,role:me.role,at:Date.now(),txt:"Vinculó la solicitud anterior "+body.id});
+      });
+      return json(200,{ok:true});
+    }
     if (["approve","reject"].includes(body?.action)) {
       const pid = await decideApplication(db,body.id,body.action,me);
-      if (pid) await patchSnapshot(db,["players/"+pid]);
+      
       return json(200,{ok:true,pid});
     }
+    if(body.action==="retryDelivery" && validId(body.id) && ["invite","receipt"].includes(body.kind)){
+      const ref=db.doc("recruits/"+body.id),row=(await ref.get()).data();
+      if(!row || body.kind==="invite" && (row.status!=="approved" || !row.paid))return json(409,{error:"Primero aprobá al jugador."});
+      if(body.kind==="invite" && !(await db.doc("recruitjobs/invite_"+body.id).get()).exists){
+        const recipient=row.discordId || (snowflake(body.id)?body.id:body.discordId);
+        if(!snowflake(recipient))return json(400,{error:"Indicá el ID numérico de Discord del jugador."});
+        if(!row.discordId && !snowflake(body.id)){
+          const u=await api("GET","/users/"+recipient);
+          if(u.username.toLowerCase()!==String(row.discord).replace(/^@/,"").toLowerCase())return json(409,{error:"El ID no coincide con el usuario de la encuesta."});
+        }
+        await db.runTransaction(async tx=>{
+          const jobRef=db.doc("recruitjobs/invite_"+body.id);
+          if((await tx.get(jobRef)).exists)return;
+          enqueue(tx,db,"invite",body.id,recipient);tx.update(ref,{discordId:recipient,inviteState:"pending"});
+        });
+      }
+      const state=await deliver(db,body.kind,body.id,{manual:true});
+      return json(200,{state,message:labels[state]||state});
+    }
     if (body.action === "payment" && validId(body.id) && typeof body.paid === "boolean") {
-      await db.doc("recruits/"+body.id).update({paid:body.paid,verifiedBy:me.u,verifiedAt:Date.now()});
+      const pid=await decideApplication(db,body.id,body.paid?"verify":"denyReceipt",{...me,receiptHash:body.hash});
+      if(pid){await patchSnapshot(db,["players/"+pid]);await Promise.all([work(db,"roles_"+pid),work(db,"free_"+pid),deliver(db,"invite",body.id)]);}
       return json(200,{ok:true});
+    }
+    if(body.action==="operations"){
+      if(!me.ultra)return json(403,{error:"Solo ultra admin."});
+      const [jobs,history,invites,events,dispatch]=await Promise.all([db.collection("communityjobs").get(),db.collection("paymenthistory").get(),db.collection("recruitjobs").where("kind","==","invite").get(),db.collection("invitehistory").get(),db.collection("recruitjobs").get()]);
+      return json(200,{deliveryErrors:dispatch.docs.map(d=>d.data()).filter(j=>j.lastError).map(j=>({id:j.id,kind:j.kind,error:j.lastError,at:j.errorAt,state:j.state})),events:events.docs.map(d=>d.data()),jobs:jobs.docs.map(d=>({...d.data(),id:d.id,token:undefined})),history:history.docs.map(d=>d.data()),invites:invites.docs.map(d=>{const {id,state,expires,createdAt,joinedAt}=d.data();return {id,state,expires,createdAt,joinedAt};})});
+    }
+    if(body.action==="retryJob"){
+      if(!me.ultra || !/^[\w-]{2,140}$/.test(body.key||""))return json(403,{error:"Solo ultra admin."});
+      const ref=db.doc("communityjobs/"+body.key);
+      await db.runTransaction(async tx=>{const j=(await tx.get(ref)).data();if(j?.kind==="roles" && j.state==="done")tx.update(ref,{state:"pending",next:0});});
+      await work(db,body.key,{manual:true});return json(200,{ok:true});
     }
     if (body.action === "count") {
       const records = db.collection("recruits");
