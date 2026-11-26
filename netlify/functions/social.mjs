@@ -1,3 +1,4 @@
+import {playerWallet} from "../lib/player-wallet.mjs";
 import {initAdmin} from "../lib/admin.mjs";
 import {json,whoIs,readBody} from "../lib/auth.mjs";
 import {patchSnapshot} from "../lib/publish.mjs";
@@ -35,6 +36,7 @@ export default async function handler(req){
  if(req.method!=="POST")return json(405,{error:"Método inválido."});
  const who=await whoIs(req,admin);if(!who)reject("Entrá con tu cuenta.",401);
  const b=await readBody(req,250000),action=b.action;
+ if(["wallet","walletAdjust","walletMatch"].includes(action)){const result=await playerWallet(db,who,b,admin.firestore.FieldValue,now);if(result.paths)await patchSnapshot(db,result.paths).catch(()=>{});return json(200,result);}
  if(action==="settings"||action==="pack"||action==="item"){
  if(!who.ultra)reject("Solo Ultra Admin.",403);
  if(action==="pack"){const ids=[...new Set(String(b.ids||"").split(/[ ,\n]+/).filter(Boolean))];if(!key(b.id)||!short(b.name,60)||!ids.length||ids.length>80||!bounded(b.discount,0,90))reject("Revisá el paquete.");await db.runTransaction(async tx=>{const current=(await tx.get(cfg)).data()||{},all=catalog(current);if(ids.some(id=>!all.some(i=>i.id===id)))reject("El paquete tiene IDs inexistentes.");tx.set(cfg,{packs:{[b.id]:{name:short(b.name,60),ids,discount:b.discount,active:!!b.active}}},{merge:true});});return json(200,{ok:true});}
@@ -48,14 +50,38 @@ export default async function handler(req){
  const batch=db.batch();if(b.art){const image=cleanPicture(b.art);batch.set(db.doc("socialart/"+b.id),{image});item.artAt=now;}batch.set(cfg,{items:{[b.id]:item}},{merge:true});await batch.commit();return json(200,{ok:true});
  }
  if(action==="usage"){if(!who.ultra)reject("Solo Ultra Admin.",403);const [ws,rs]=await Promise.all([db.collection("socialprofiles").get(),db.collection("socialreceipts").get()]);return json(200,{profiles:ws.size,premium:ws.docs.filter(d=>d.data().until>now).length,orders:rs.size,spent:rs.docs.reduce((s,d)=>s+d.data().cost,0),errors:ws.docs.filter(d=>d.data().roleError).map(d=>({pid:d.id,error:d.data().roleError})).slice(0,50)});}
- if(action==="reservePrize"){
- if(!who.captain||!who.team)reject("Solo capitanes con equipo.",403);if(!key(b.pid)||!key(b.prizeId)||!key(b.requestId))reject("Pedido inválido.");
+ if(action==="reviewPlayerPrize"){
+ if(!who.staff)reject("Solo staff.",403);if(!key(b.id)||typeof b.ok!=="boolean")reject("Pedido inválido.");
+ const paths=await db.runTransaction(async tx=>{
+   const ref=db.doc("redeems/"+b.id),r=(await tx.get(ref)).data();
+   if(!r||!r.pid||r.coach||r.method!=="pts")reject("Canje de jugador inexistente.",404);
+   const status=b.ok?"ok":"no";
+   if(r.status===status)return [];
+   if(r.status!=="pend")reject("El pedido ya se revisó.",409);
+   const paths=[ref.path];
+   if(b.ok){
+     const prize=db.doc("prizes/"+r.prizeId),p=(await tx.get(prize)).data();
+     if(!p)reject("Ese premio ya no existe.",409);
+     const perf=await tx.get(db.doc("perf/"+r.pid)),rs=await tx.get(db.collection("redeems").where("pid","==",r.pid));
+     if(balance(perf.data()||{},{docs:rs.docs.filter(doc=>doc.id!==b.id)})<r.pts)reject("Saldo insuficiente.",409);
+     if(p.stock!=null&&p.stock!==""){if(!Number.isInteger(+p.stock)||+p.stock<1)reject("Premio agotado.",409);tx.update(prize,{stock:+p.stock-1});paths.push(prize.path);}
+   }
+   tx.update(ref,{status,reviewedBy:who.u,reviewedAt:now,staffNote:short(b.note,140),delivered:false});
+   tx.set(db.collection("audit").doc(),{at:now,uid:who.uid,u:who.u,role:who.role,txt:(b.ok?"Aprobó":"Rechazó")+" el canje "+b.id+" · "+r.prize});
+   tx.set(db.doc("pubqueue/main"),{paths:admin.firestore.FieldValue.arrayUnion(...paths),at:now},{merge:true});return paths;
+ });
+ if(paths.length)await patchSnapshot(db,paths).catch(()=>{});
+ return json(200,{ok:true});
+ }
+ if(action==="reservePrize"||action==="ownPrize"){
+ const personal=action==="ownPrize";if(personal&&(!who.pid||who.pid!==b.pid))reject("Vinculá tu jugador para pedir este premio.",403);
+ if(!personal&&(!who.captain||!who.team))reject("Solo capitanes con equipo.",403);if(!key(b.pid)||!key(b.prizeId)||!key(b.requestId))reject("Pedido inválido.");
  const player=db.doc("players/"+b.pid),social=db.doc("socialprofiles/"+b.pid),redeem=db.doc("redeems/res_"+b.requestId);
  await db.runTransaction(async tx=>{const [p,pr,perf,rs,previous,account]=await Promise.all([tx.get(player),tx.get(db.doc("prizes/"+b.prizeId)),tx.get(db.doc("perf/"+b.pid)),tx.get(db.collection("redeems").where("pid","==",b.pid)),tx.get(redeem),tx.get(social)]);
  if(previous.exists){if(previous.data().by!==who.uid||previous.data().pid!==b.pid)reject("Pedido inválido.");return;}
- if(p.data()?.team!==who.team)reject("El jugador ya no está en tu equipo.",403);const prize=pr.data();if(!prize?.active||!bounded(prize.pts,1,10000000)||(prize.stock!=null&&prize.stock!==""&&Number(prize.stock)<=0))reject("Premio no disponible.");
+ if(personal){const m=(await tx.get(db.doc("members/"+who.uid))).data();if(!p.exists||m?.pid!==b.pid||m.banned)reject("Revisá tu vinculación.",403);}if(!personal&&p.data()?.team!==who.team)reject("El jugador ya no está en tu equipo.",403);const prize=pr.data();if(!prize?.active||!bounded(prize.pts,1,10000000)||(prize.stock!=null&&prize.stock!==""&&Number(prize.stock)<=0))reject("Premio no disponible.");
  if(prize.pts!==b.expectedCost||prize.pts>balance(perf.data()||{},rs))reject("Revisá el precio y el saldo disponible.",409);
- tx.set(social,{reserveAt:now},{merge:true});tx.set(redeem,{prizeId:b.prizeId,prize:short(prize.name,60),pid:b.pid,player:p.data().name||"",team:who.team,method:"pts",pts:prize.pts,usd:prize.usd??null,note:short(b.note,200),by:who.uid,u:who.u,at:now,status:"pend"});
+ tx.set(social,{reserveAt:now},{merge:true});tx.set(redeem,{prizeId:b.prizeId,prize:short(prize.name,60),pid:b.pid,player:p.data().name||"",team:p.data().team||null,method:"pts",pts:prize.pts,usd:prize.usd??null,note:short(b.note,200),by:who.uid,u:who.u||p.data().name||"Jugador",at:now,status:"pend"});
  tx.set(db.doc("pubqueue/main"),{paths:admin.firestore.FieldValue.arrayUnion(redeem.path),at:now},{merge:true});});
  await patchSnapshot(db,[redeem.path]).catch(()=>{});return json(200,{ok:true});
  }
