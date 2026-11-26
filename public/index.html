@@ -112,7 +112,7 @@
         <a href="#perfil" data-v="perfil" aria-label="Mi perfil"><svg class="ic"><use href="#i-user"/></svg><span>Mi perfil</span></a>
         <a href="#elegir-mapa" data-v="elegir-mapa" aria-label="Mi mapa" id="navMp" hidden><svg class="ic"><use href="#i-flag"/></svg><span>Mi mapa</span><i class="ndot" id="navMpDot" hidden></i></a>
         <a href="#pronosticos" data-v="pronosticos" aria-label="Pronósticos"><svg class="ic"><use href="#i-target"/></svg><span>Pronósticos</span></a>
-        <a href="#canjes" data-v="canjes" aria-label="Canjes"><svg class="ic"><use href="#i-gift"/></svg><span>Canjes</span></a>
+        <a href="#canjes" data-v="canjes" aria-label="Billetera y recompensas"><svg class="ic"><use href="#i-gift"/></svg><span>Billetera y recompensas</span></a>
         <a href="#capitania" data-v="capitania" aria-label="Capitanía"><svg class="ic"><use href="#i-crown"/></svg><span>Capitanía</span></a>
 </div>
 <div class="ngrp"><span class="ngrp-t">Temporada y comunidad</span>
@@ -177,7 +177,7 @@
           </div>
         </div>
 
-        <div class="statbar" id="statbar">
+        <a class="oxwallet-home" href="#canjes"><span>ONYX Coins</span><strong>Mi billetera y recompensas</strong><b>Ver recompensas →</b></a><div class="statbar" id="statbar">
           <div><b class="num" id="stTeams">7</b><span>Equipos</span></div>
           <div><b class="num" id="stPlayers">0</b><span>Jugadores</span></div>
           <div><b class="num" id="stCoins">0</b><span>ONYX Coins en juego</span></div>
@@ -359,11 +359,11 @@
   <!-- CANJES -->
   <section class="sec view" id="canjes" data-title="Canjes">
     <div class="sec-head">
-      <div><div class="crumb"><svg class="ic"><use href="#i-gift"/></svg><span>Jugadores</span></div><h2>Canjes</h2>
-        <p>Los jugadores juntan puntos individuales y los cambian por premios. El canje lo pide el capitán del equipo y el staff lo aprueba.</p></div>
+      <div><div class="crumb"><svg class="ic"><use href="#i-gift"/></svg><span>Jugadores</span></div><h2>Mi billetera y recompensas</h2>
+        <p>Consultá tus ONYX Coins, revisá los movimientos y elegí una recompensa.</p></div>
       <div class="cj-saldo cut-s"><label for="cjPlayer" class="muted">Saldo de</label><select id="cjPlayer" aria-label="Ver el saldo de un jugador"></select><b id="cjSaldoVal">–</b></div>
     </div>
-    <button class="btn" type="button" data-social-open="shop">Tienda de personalizaciones</button><div class="cj-note" id="cjNote"></div>
+    <onyx-wallet></onyx-wallet><div class="cj-note" id="cjNote"></div>
     <div class="cj-grid" id="cjGrid"></div>
     <div class="cj-bottom">
       <div class="panel pad cut" id="cjMineBox" hidden><div class="h3">Pedidos de tu equipo</div><div id="cjMine" style="display:grid;gap:6px;margin-top:12px"></div></div>
@@ -621,6 +621,6 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <script src="js/firebase-config.js"></script>
-<script src="js/app.js"></script><script type="module" src="js/perfiles.mjs"></script>
+<script src="js/app.js"></script><script type="module" src="js/perfiles.mjs"></script><script type="module" src="js/billetera.mjs"></script>
 </body>
 </html>

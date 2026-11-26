@@ -1,5 +1,13 @@
 # ONYX Leagues · Perfiles, colecciones y Discord
 
+## Billeteras y recompensas
+
+Desde Inicio o el menú lateral, **Mi billetera y recompensas** muestra los OC disponibles, créditos, reservas, canjes e historial del jugador vinculado. En la misma pantalla se pueden pedir premios con puntos, canjear música, rol y canal de Discord, o membresías Premium. La tienda de cosméticos tiene accesos por categoría.
+
+En el panel de staff, **Billeteras** permite elegir un jugador, revisar sus movimientos y acreditar o descontar OC con motivo. **Recompensas** reúne los pedidos de canje, su aprobación y entrega, y un formulario para premiar a los participantes de un partido con acta oficial. El staff decide el importe antes de confirmar. Cada partido admite una acreditación grupal por temporada. Ultra Admin puede agregar premios, editar precios y gestionar el catálogo cosmético. Las cuentas existentes conservan sus créditos y gastos al instalar esta actualización.
+
+Se aprobaron 84 pruebas de regresión, incluidas las nuevas de permisos, reservas, acreditación por partido y revisión de pedidos. Las pantallas de billetera, catálogo y formularios administrativos se recorrieron con Chrome local y datos de prueba.
+
 ## Publicación
 
 1. Descomprimí el ZIP en el repositorio que compila Netlify. `netlify.toml`, `public` y `netlify` deben quedar en la raíz del repositorio. El proyecto necesita un despliegue que compile las Functions.

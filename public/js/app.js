@@ -598,6 +598,7 @@ function renderAll() {
   $("#capBtn").hidden = !S.captain;
   shellState();
   if (S.adm.open) renderAdmin();
+  document.dispatchEvent(new Event("onyx-wallet-refresh"));
   if (S.cap.open) renderCap();
   if (ST.open && !ST.spinning) renderStage();
   tryDeep();
@@ -1205,7 +1206,7 @@ function renderCanjes() {
   $("#cjSaldoVal").textContent = pick ? `${fmt(saldo)} ${saldoUnit(pick.id)}` : "–";
   $("#cjNote").innerHTML = ct ? `<span>Sos capitán de <b>${esc(TM(ct).name)}</b>: tocá <b>Canjear</b> en un premio y elegí para qué jugador es.</span>`
     : S.captain ? "<span>Todavía no tenés equipo asignado: pedile a un ultra staff que te asigne uno.</span>"
-    : '<span>Solo los capitanes pueden canjear. Si sos capitán, <button class="linkish" id="cjLogin" type="button">entrá con tu cuenta</button>.</span>';
+    : '<span>Los capitanes también pueden gestionar pedidos de su equipo. Si sos capitán, <button class="linkish" id="cjLogin" type="button">entrá con tu cuenta</button>.</span>';
   $("#cjGrid").innerHTML = list.map(p => {
     const st = prizeStock(p), out = st === 0, cost = +p.pts || 0;
     const prog = pick && cost ? `<div class="cj-prog"><i style="--w:${Math.min(100, saldo / cost * 100).toFixed(0)}%"></i><span>${saldo >= cost ? `A ${esc(pick.name)} le alcanza` : `A ${esc(pick.name)} le faltan ${fmt(cost - saldo)} ${saldoUnit(pick.id)}`}</span></div>` : "";
@@ -1214,7 +1215,7 @@ function renderCanjes() {
       <div class="cj-b"><h3>${esc(p.name)}</h3>${p.desc ? `<p>${esc(p.desc)}</p>` : ""}
         <div class="cj-cost">${cost ? `<span class="pts"><b>${fmt(cost)}</b> pts</span>` : ""}${cost && p.usd != null && p.usd !== "" ? '<span class="o">o</span>' : ""}${p.usd != null && p.usd !== "" ? `<span class="usd"><b>${usdTxt(p.usd)}</b></span>` : ""}${!cost && (p.usd == null || p.usd === "") ? '<span class="muted">Precio a confirmar</span>' : ""}</div>
         ${prog}
-        <div class="cj-foot">${!ct ? '<span class="adm-note">Solo capitanes</span>' : out ? '<button class="btn sm ghost" disabled>Agotado</button>' : `<button class="btn sm gold" data-cj="${p.id}">Canjear</button>`}</div></div></article>`;
+        <div class="cj-foot">${!ct ? '<span class="adm-note">Canje del capitán</span>' : out ? '<button class="btn sm ghost" disabled>Agotado</button>' : `<button class="btn sm gold" data-cj="${p.id}">Canjear</button>`}</div></div></article>`;
   }).join("") || '<p class="muted">Todavía no hay premios cargados.</p>';
   const row = r => { const st = RD_ST[r.status] || ["?", "pend"]; return `<div class="offer">${img(r.team)}<div><b>${esc(r.player || "Jugador")}</b><div class="muted" style="font-size:12px">${esc(r.prize || "Premio")} · ${r.method === "usd" ? usdTxt(r.usd || 0) : fmt(r.pts) + " pts"}${r.delivered ? " · entregado" : ""}${r.staffNote ? " · " + esc(r.staffNote) : ""}</div></div><span class="st ${st[1]}">${st[0]}</span></div>`; };
   const mine = ct ? redeemList().filter(r => r.team === ct) : [];
@@ -1968,10 +1969,10 @@ $("#ideaList").innerHTML = IDEAS.map(([b, s, h]) => `<a class="idea cut" href="$
 
 /* ================= ADMIN ================= */
 const ADM_TABS = [["inicio","Inicio","Resumen"],["solicitudes","Solicitudes","Resumen"],["partidos","Partidos","Competencia"],["resultados","Resultados","Competencia"],["tabla","Tabla","Competencia"],["playoffs","Playoffs","Competencia"],["mapas","Mapas","Competencia"],
-  ["jugadores","Jugadores","Personas"],["rendimiento","Rendimiento","Personas"],["equipos","Equipos","Personas"],["mercado","Mercado","Personas"],["coaches","Coaches","Personas"],["canjes","Canjes","Personas"],["economia","Economía","Personas"],["fairplay","Fair play","Personas"],
+  ["jugadores","Jugadores","Personas"],["rendimiento","Rendimiento","Personas"],["equipos","Equipos","Personas"],["mercado","Mercado","Personas"],["coaches","Coaches","Personas"],["billeteras","Billeteras","Economía de jugadores"],["recompensas","Recompensas","Economía de jugadores"],["economia","Finanzas de equipos","Economía de equipos"],["fairplay","Fair play","Personas"],
   ["general","General","Configuración"],["staff","Cuentas y auditoría","Configuración"],["seguridad","Seguridad","Configuración"],["bot","ONYX Bot","Configuración"]];
 const ULTRA_TABS = ["tabla", "general", "staff", "seguridad", "bot"];
-const ADM_ICON = {inicio: "i-grid", solicitudes: "i-inbox", partidos: "i-calendar", resultados: "i-check", tabla: "i-table", playoffs: "i-trophy", mapas: "i-map", jugadores: "i-users", rendimiento: "i-pulse", equipos: "i-shield", mercado: "i-coins", coaches: "i-whistle", canjes: "i-gift", economia: "i-wallet", fairplay: "i-scale", general: "i-sliders", staff: "i-key", seguridad: "i-lock", bot: "i-bot"};
+const ADM_ICON = {billeteras:"i-wallet",recompensas:"i-gift",inicio: "i-grid", solicitudes: "i-inbox", partidos: "i-calendar", resultados: "i-check", tabla: "i-table", playoffs: "i-trophy", mapas: "i-map", jugadores: "i-users", rendimiento: "i-pulse", equipos: "i-shield", mercado: "i-coins", coaches: "i-whistle", canjes: "i-gift", economia: "i-wallet", fairplay: "i-scale", general: "i-sliders", staff: "i-key", seguridad: "i-lock", bot: "i-bot"};
 const ico = (id, cls = "") => `<svg class="ic ${cls}" aria-hidden="true"><use href="#${id}"/></svg>`;
 const ULTRA_ACTS = new Set(["bk-create","bk-dl","bk-restore","bk-upload","acc-revoke","season-close","po-del","lg-del","coach-del","cj-add","cj-pdel","cj-del","tbl-form","tbl-reset","team-add","team-del","team-hide","team-restore","logo-del","m-del","p-del","tr-del","map-del","map-add","used-reset-all","wipe-results","wipe-players","wipe-market","ex-copy","window-new","acc-add","acc-reset","acc-del","fixture-gen","fx-open","fecha-del","fecha-del-all","cap-add","cap-reset","cap-del","acc-import"]);
 $("#adminBtn").addEventListener("click", () => openAdmin());
@@ -2002,7 +2003,7 @@ function renderAdmin() {
   if (root.contains(ae) && ae.matches("input,select,textarea")) { S.adm.dirty = true; return; }
   const body = $(".adm-body", root), scroll = body ? body.scrollTop : 0;
   const R = RM(), Dr = deriveFor(R);
-  const tabHtml = {inicio: admInicio, solicitudes: admSolicitudes, rendimiento: admRendimiento, partidos: admPartidos, jugadores: admJugadores, tabla: admTabla, equipos: admEquipos, mercado: admMercado, mapas: admMapas, fairplay: admFair, general: admGeneral, staff: admStaff, bot: admBot, canjes: admCanjes, coaches: admCoaches, resultados: admResultados, playoffs: admPlayoffs, economia: admEconomia, seguridad: admSeguridad}[S.adm.tab](R, Dr);
+  const tabHtml = {billeteras:()=>'<div class="adm-card"><h3>Billeteras de jugadores</h3><onyx-wallet mode="staff"></onyx-wallet></div>',recompensas:R=>'<div class="adm-card"><h3>Premiar participación</h3><onyx-wallet mode="match"></onyx-wallet></div>'+(isUltra()?'<div class="adm-card"><button class="btn" data-social-open="admin">Editar catálogo cosmético y Premium</button></div>':'')+admCanjes(R),inicio: admInicio, solicitudes: admSolicitudes, rendimiento: admRendimiento, partidos: admPartidos, jugadores: admJugadores, tabla: admTabla, equipos: admEquipos, mercado: admMercado, mapas: admMapas, fairplay: admFair, general: admGeneral, staff: admStaff, bot: admBot, canjes: admCanjes, coaches: admCoaches, resultados: admResultados, playoffs: admPlayoffs, economia: admEconomia, seguridad: admSeguridad}[S.adm.tab](R, Dr);
   const cnt = admCounts(), badge = {solicitudes: cnt.req, mercado: cnt.off, fairplay: cnt.rep, canjes: cnt.cj, coaches: cnt.sal, resultados: cnt.res};
   let lastG = "";
   const tabsHtml = ADM_TABS.filter(([k]) => (isUltra() || !ULTRA_TABS.includes(k)) && (k !== "bot" || isBotAdmin())).map(([k, l, g]) => { const head = g !== lastG ? `<span class="grp">${g}</span>` : ""; lastG = g;
@@ -2335,7 +2336,7 @@ function admCanjes(R) {
         ${fld("Descripción", `<input value="${esc(p.desc || "")}" maxlength="160" data-bind="${b("desc")}" data-t="s">`)}
         <div class="rowbtns"><span class="chk"><input type="checkbox" ${p.active !== false ? "checked" : ""} data-bind="${b("active")}" data-t="b">Visible en la página</span><label class="btn sm ghost file-btn">Cambiar foto<input type="file" accept="image/png,image/jpeg,image/webp" data-prizeimg="${p.id}"></label><button class="btn sm danger" data-act="cj-pdel:${p.id}">Borrar premio</button></div></div>`
       : `<div><b>${esc(p.name)}</b><div class="adm-note">${p.pts ? fmt(p.pts) + " pts" : ""}${p.pts && p.usd != null && p.usd !== "" ? " o " : ""}${p.usd != null && p.usd !== "" ? usdTxt(p.usd) : ""} · ${st == null ? "sin límite de stock" : "stock " + st}${p.active === false ? " · oculto" : ""}</div></div>`}</div>`; }).join("") || '<p class="adm-note">Todavía no hay premios.</p>'}</div></div>`;
-  return `<div class="adm-card"><h3>Pedidos de canje <small>${pend.length} esperando · los piden los capitanes</small></h3><div style="display:grid;gap:8px">${pend.map(rowR).join("") || '<p class="adm-note">No hay pedidos esperando.</p>'}</div>
+  return `<div class="adm-card"><h3>Pedidos de canje <small>${pend.length} esperando · pendientes de revisión</small></h3><div style="display:grid;gap:8px">${pend.map(rowR).join("") || '<p class="adm-note">No hay pedidos esperando.</p>'}</div>
       <p class="adm-note">Al aprobar con puntos se descuentan del saldo del jugador (los puntos individuales del ranking no cambian). Si el premio tiene stock, baja uno.</p></div>
     ${add}${prizes}
     <div class="adm-card"><h3>Historial de canjes</h3><div style="display:grid;gap:8px">${hist.map(rowR).join("") || '<p class="adm-note">Sin canjes todavía.</p>'}</div></div>`;
@@ -2343,6 +2344,7 @@ function admCanjes(R) {
 async function reviewRedeem(id, ok) {
   const r = clone(S.remote.redeems[id]); if (!r || r.status !== "pend") return;
   const note = (($(`#cjn-${id}`) || {}).value || "").trim().slice(0, 140);
+  if(r.pid&&!r.coach&&r.method==="pts"){try{await api("/api/social",{action:"reviewPlayerPrize",id,ok,note});toast(ok?"Canje aprobado.":"Canje rechazado. Saldo liberado.");document.dispatchEvent(new Event("onyx-purchase-complete"));}catch(e){toast(e.message);}return;}
   if (ok) {
     const pr = S.remote.prizes[r.prizeId]; if (!pr) { toast("Ese premio ya no existe."); return; }
     const st = prizeStock(pr); if (st === 0) { toast("No queda stock de ese premio."); return; }
@@ -5558,6 +5560,7 @@ renderAll();
 setInterval(tickClock, 1000);
 initShell();
 initFirebase();
+window.onyxWallet={api, identity:()=>({uid:AUTH?.currentUser?.uid||"",pid:S.member?.pid||"",staff:!!S.staff}),players:()=>Object.entries(S.remote.players||{}).map(([id,p])=>({id,name:p.name||id})),matches:()=>Object.entries(S.remote.matches||{}).filter(([,m])=>m.status==="played"&&Object.keys(m.stats||{}).length).map(([id,m])=>({id,name:"Fecha "+m.fecha+" · "+m.a+" vs. "+m.b,count:Object.keys(m.stats).length})),prizes:()=>prizeList().filter(p=>p.active!==false&&p.pts>0),login:()=>openAccount(),member:()=>goView("perfil")};
 window.onyxProfiles={api,me:()=>myPid(),ultra:isUltra,scout:openAnalysis,players:()=>M&&!M.ex?D.P.map(p=>({id:p.id,name:p.name})):[],player:id=>{const p=D?.PM[id];if(!p||M.ex)return null;const raw=S.remote.players[id]||{},r=raw.recruitment||{},v=vsOf(id);return {percentiles:p.s.m?pcsOf(metricsOf(p),scLeague()):null,name:p.name,team:p.team?TM(p.team).name:"Agente libre",ign:ignOf(id),role:r.principal||p.role,secondary:r.secundario||null,agents:r.agentes||null,rank:v?.rank||raw.rank||null,peak:v?.peak?.rank||r.peak||null,country:r.pais,hours:r.horarios,flex:r.flex,joined:raw.joinedAt||null,v,seasons:Object.values(S.remote.seasons||{}).filter(s=>s.players?.[id]).map(s=>({name:s.name,stats:s.players[id],awards:Object.values(s.awards||{}).filter(a=>a.id===id).map(a=>a.label)})),points:(perfOf(id).pts||[]).filter(x=>x.id!=="carry"&&x.v>0).map(x=>({at:x.at,v:x.v})),log:p.log.map(x=>({...x,map:S.remote.matches[x.mid]?.map||null,agent:S.remote.matches[x.mid]?.stats?.[id]?.agent||null,extra:Object.fromEntries(["adr","kast","hs","firstBloods","aces","clutches","teamMvp"].map(k=>[k,S.remote.matches[x.mid]?.stats?.[id]?.[k]]))})),s:p.s,mvps:D.played.filter(m=>m.mvpId===id).length,transfers:M.transfers.filter(t=>t.pid===id).sort((a,b)=>b.at-a.at),awards:AWARD_KINDS.filter(([k])=>M.cfg.awards?.[k]===id).map(x=>x[1])};}};
 finishDiscordLogin();
 })();
