@@ -586,6 +586,7 @@ async function ensureUid() {
 let raf = 0;
 function schedule() { if (raf) return; raf = requestAnimationFrame(() => { raf = 0; renderAll(); }); }
 function renderAll() {
+  document.dispatchEvent(new Event("onyx-session-change"));
   M = model(); derive();
   renderBanner(); renderHero(); renderTicker(); renderManager();
   renderPts(); renderTable(); renderFixture();
@@ -855,11 +856,11 @@ function renderRank() {
   $("#podium").innerHTML = [L[1], L[0], L[2]].map((x, i) => {
     if (!x) return "<div></div>";
     const t = TM(x.p.lastTeam);
-    return `<div class="pod" data-p="${x.p.id}" style="--tc:${t.c}" tabindex="0">${img(x.p.lastTeam, "av")}<div class="blk cut-s"><div class="place">${[2, 1, 3][i]}</div><div class="nm">${esc(x.p.name)}</div><div class="val">${fv(st, x.v)}</div><div class="sub">${esc(t.name)} · ${rkSub(st, x)}</div></div></div>`;
+    return `<div class="pod" data-p="${x.p.id}" style="--tc:${t.c}" tabindex="0"><onyx-identity compact pid="${esc(x.p.id)}"></onyx-identity><div class="blk cut-s"><div class="place">${[2, 1, 3][i]}</div><div class="nm">${esc(x.p.name)}</div><div class="val">${fv(st, x.v)}</div><div class="sub">${esc(t.name)} · ${rkSub(st, x)}</div></div></div>`;
   }).join("");
   const max = Math.max(1, L[0].v || 1);
   $("#rlist").innerHTML = L.slice(3).map((x, i) => { const t = TM(x.p.lastTeam);
-    return `<div class="rrow" data-p="${x.p.id}" style="--tc:${t.c}" tabindex="0"><span class="p">${i + 4}</span>${img(x.p.lastTeam)}<span class="nm">${esc(x.p.name)}<small>${x.p.role} · ${esc(t.name)}</small></span><span class="bar"><i data-w="${(x.v / max * 100).toFixed(1)}"></i></span><span class="v">${fv(st, x.v)}</span></div>`; }).join("");
+    return `<div class="rrow" data-p="${x.p.id}" style="--tc:${t.c}" tabindex="0"><span class="p">${i + 4}</span><onyx-identity compact pid="${esc(x.p.id)}"></onyx-identity><span class="nm">${esc(x.p.name)}<small>${x.p.role} · ${esc(t.name)}</small></span><span class="bar"><i data-w="${(x.v / max * 100).toFixed(1)}"></i></span><span class="v">${fv(st, x.v)}</span></div>`; }).join("");
   requestAnimationFrame(() => requestAnimationFrame(() => $$("#rlist .bar i").forEach(b => b.style.setProperty("--w", b.dataset.w + "%"))));
 }
 $("#rkTeams").addEventListener("click", e => { const b = e.target.closest("button"); if (!b) return; S.rk.team = b.dataset.t; renderRankChips(); renderRank(); });
@@ -1264,10 +1265,19 @@ function myOffers() { const d = S.uid && S.remote.offers[S.uid]; return (d && Ar
 function allOffers() { const out = []; Object.entries(S.remote.offers).forEach(([uid, d]) => (d.items || []).forEach(o => out.push({...o, team: d.team || o.team, uid}))); return out.sort((a, b) => b.at - a.at); }
 function signings(k) { return M.transfers.filter(t => t.to === k && (t.win ?? 0) === M.cfg.windowId).length; }
 const marketAccess = () => !!(S.captain || S.staff);
+function shortlist(){
+ const key="onyx-scout-"+(S.uid||"visitante");try{return new Set(JSON.parse(localStorage.getItem(key)||"[]"));}catch{return new Set();}
+}
+function scoutFacts(p){
+ const raw=S.remote.players[p.id]||{},r=raw.recruitment||{},v=vsOf(p.id),last=p.log.slice(-3);
+ const kast=p.log.map(row=>S.remote.matches[row.mid]?.stats?.[p.id]?.kast).filter(Number.isFinite);
+ return {rank:v?.rank||raw.rank||p.rank,peak:v?.peak?.rank||r.peak,secondary:r.secundario,agents:r.agentes,hours:r.horarios,
+ kd:p.s.m?p.s.kd:null,acs:p.s.m?p.s.acs:null,adr:v?.recent?.adr,kast:kast.length?kast.reduce((a,b)=>a+b,0)/kast.length:null,win:p.s.m?100*p.s.w/p.s.m:null,games:p.s.m,recent:last.length?last.reduce((s,x)=>s+x.acs,0)/last.length:null};
+}
 function renderMarket() {
   const acc = marketAccess();
   const available = D.P.filter(p=>!p.team && M.players[p.id]?.marketEligible!==false && M.players[p.id]?.recruitment).sort((a,b)=>a.name.localeCompare(b.name));
-  $("#freePreview").innerHTML = available.length ? available.slice(0,4).map(p=>`<button type="button" class="free-preview-card" data-free-player="${esc(p.id)}"><b>${esc(p.name)}</b><span>${esc(p.role)} · ${esc(p.rank)}</span><strong>${fmt(p.value)} ONYX Coins</strong></button>`).join("") : '<p class="adm-note">Todavía no hay agentes libres con una postulación aprobada.</p>';
+  $("#freePreview").innerHTML = available.length ? available.slice(0,4).map(p=>`<button type="button" class="free-preview-card" data-free-player="${esc(p.id)}"><onyx-identity compact pid="${esc(p.id)}"></onyx-identity><b>${esc(p.name)}</b><span>${esc(p.role)} · ${esc(p.rank)}</span><strong>${fmt(p.value)} ONYX Coins</strong></button>`).join("") : '<p class="adm-note">Todavía no hay agentes libres con una postulación aprobada.</p>';
   $("#mkLock").hidden = acc; $("#mkBody").hidden = !acc; $("#navMk").hidden = false; $("#heroMk").hidden = !acc; $("#mgrCoinsBox").hidden = !acc;
   if (!acc) { ["#cards", "#myOffers", "#allOffers", "#wallet"].forEach(id => { $(id).innerHTML = ""; }); return; }
   const t = TM(S.my), r = D.real.find(x => x.k === S.my), w = $("#wallet");
@@ -1278,13 +1288,18 @@ function renderMarket() {
     <div class="window"><div class="open" style="${M.cfg.windowOpen ? "" : "color:var(--loss)"}">${M.cfg.windowOpen ? "VENTANA ABIERTA" : "VENTANA CERRADA"}</div><div class="t mono" id="winLeft">${windowLeft()}</div><div class="muted" style="font-size:12px">${M.cfg.windowClose ? "cierra " + fmtDate(M.cfg.windowClose) : ""}</div></div>`;
   const {cat, role, team, sort, q} = S.mk;
   let L = D.P.filter(p => (p.team || M.players[p.id]?.marketEligible!==false) && (cat === "all" || catOf(p.value) === cat) && (role === "all" || p.role === role) && (team === "all" || (team === "free" ? !p.team : p.team === team)) && (!q || p.name.toLowerCase().includes(q.toLowerCase())));
-  L.sort((a, b) => sort === "v" ? b.value - a.value : sort === "acs" ? b.s.acs - a.s.acs : b.s.kd - a.s.kd);
+  const saved=shortlist(), facts=new Map(L.map(p=>[p.id,scoutFacts(p)])),filters=Array.from($("#scoutFilters").querySelectorAll("input"));
+  L=L.filter(p=>filters.every(f=>{if(f.type==="checkbox")return !f.checked||saved.has(p.id);if(!f.value.trim())return true;const v=facts.get(p.id)[f.name];if(v==null)return false;return f.type==="number"?v>=Number(f.value):String(v).toLocaleLowerCase().includes(f.value.trim().toLocaleLowerCase());}));
+  const score=p=>sort==="v"?p.value:(facts.get(p.id)[sort]??-Infinity);
+  L.sort((a,b)=>score(b)-score(a)||a.name.localeCompare(b.name));
   const ct = capTeam(), pendingIds = new Set(ct ? allOffers().filter(o => ["pend","review","accepted"].includes(o.status) && o.team === ct).map(o => o.pid) : []);
   $("#cards").innerHTML = L.map(p => {
     const tt = p.team ? TM(p.team) : null, own = !!ct && p.team === ct, pend = pendingIds.has(p.id);
-    return `<article class="pcard cut tilt" style="--tc:${tt ? tt.c : "#8f8aa6"}">${!p.team ? '<span class="free-tag">LIBRE</span>' : ""}<div class="glare"></div>
+    return `<article class="pcard cut tilt" style="--tc:${tt ? tt.c : "#8f8aa6"}">${!p.team ? '<span class="free-tag">LIBRE</span>' : ""}<div class="glare"></div><onyx-identity pid="${esc(p.id)}"></onyx-identity><button class="an-link" data-social-open="profile" data-pid="${esc(p.id)}">Ver perfil</button>
       <div class="top">${p.team ? img(p.team) : `<span class="ava" style="--tc:#5b5675;width:44px;height:48px">${esc(p.name.slice(0, 2).toUpperCase())}</span>`}
         <div style="min-width:0"><div class="nm">${esc(p.name)}</div><div class="rl">${p.role} · ${tt ? esc(tt.name) : esc(p.rank || "Agente libre")}</div></div><span class="cat ${catOf(p.value)}" title="Categoría ${catOf(p.value)}">${catOf(p.value)}</span></div>
+      <div class="scout-strip">${[facts.get(p.id).rank,facts.get(p.id).peak&&"Peak "+facts.get(p.id).peak,facts.get(p.id).secondary,facts.get(p.id).agents,facts.get(p.id).win!=null&&Math.round(facts.get(p.id).win)+"% victorias",facts.get(p.id).recent!=null&&"ACS reciente "+Math.round(facts.get(p.id).recent)].filter(Boolean).map(x=>`<span>${esc(x)}</span>`).join("")} ${ignOf(p.id)?`<a href="${trackerUrl(ignOf(p.id))}" target="_blank" rel="noopener">Tracker ↗</a>`:""}</div>
+      ${ct?`<button type="button" data-scout-star="${esc(p.id)}" aria-pressed="${saved.has(p.id)}">${saved.has(p.id)?"★ En favoritos":"☆ Guardar jugador"}</button>`:""}
       <div class="pstats"><div><b>${p.s.m ? dec(p.s.kd) : "–"}</b><span>K/D</span></div><div><b>${p.s.m ? p.s.acs : "–"}</b><span>ACS</span></div><div><b>${p.s.m}</b><span>PJ</span></div></div>
       ${p.clause ? `<div class="clause">${LOCK_SVG}Cláusula de rescisión <b>${fmt(p.clause)}</b></div>` : ""}
       <button class="an-link" data-an-card="${p.id}">Ver análisis${(scLeague().all[p.id] || {}).rating != null ? ` · rating ${scLeague().all[p.id].rating}` : ""}</button>
@@ -1346,6 +1361,9 @@ function openOffer(pid) {
 }
 $("#cards").addEventListener("click", e => { const a = e.target.closest("[data-an-card]"); if (a) { openAnalysis(a.dataset.anCard); return; } const b = e.target.closest("[data-offer]"); if (b) openOffer(b.dataset.offer); });
 $("#mkLogin").addEventListener("click", () => openLogin());
+$("#scoutFilters").addEventListener("input",()=>renderMarket());
+$("#clearScout").onclick=()=>{$$("#scoutFilters input").forEach(f=>{if(f.type==="checkbox")f.checked=false;else f.value="";});renderMarket();};
+$("#cards").addEventListener("click",e=>{const b=e.target.closest("[data-scout-star]");if(!b||!capTeam())return;const saved=shortlist(),id=b.dataset.scoutStar;if(saved.has(id))saved.delete(id);else saved.add(id);localStorage.setItem("onyx-scout-"+S.uid,JSON.stringify([...saved]));renderMarket();});
 $("#mkCat").addEventListener("click", e => { const b = e.target.closest("button"); if (!b) return; S.mk.cat = b.dataset.c; $$("#mkCat button").forEach(x => x.classList.toggle("on", x === b)); renderMarket(); });
 ROLES.forEach(r => $("#mkRole").insertAdjacentHTML("beforeend", `<option>${r}</option>`));
 fillMkTeams();
@@ -1610,7 +1628,7 @@ function compareHtml() {
   return `<div class="an" role="dialog" aria-modal="true" aria-label="Comparación de jugadores"><div class="an-panel" tabindex="-1">
     <div class="an-head"><div class="an-who"><div class="eyebrow">Scouting</div><h2>Comparar jugadores</h2></div><button class="x" data-an-close aria-label="Cerrar">×</button></div>
     <div class="an-body">
-      <div class="vz-legend big">${P.map(q => `<span><i class="ln" style="--c:${q.c}"></i>${img(q.p.lastTeam)}<b>${esc(q.p.name)}</b><small>${q.p.role} · ${q.p.team ? esc(TM(q.p.team).name) : "libre"}</small><button class="linkish" data-an-open="${q.p.id}">ver análisis</button></span>`).join("")}</div>
+      <div class="vz-legend big">${P.map(q => `<span><i class="ln" style="--c:${q.c}"></i><onyx-identity compact pid="${esc(q.p.id)}"></onyx-identity><b>${esc(q.p.name)}</b><small>${q.p.role} · ${q.p.team ? esc(TM(q.p.team).name) : "libre"}</small><button class="linkish" data-an-open="${q.p.id}">ver análisis</button></span>`).join("")}</div>
       <div class="an-grid"><div class="an-card"><h4>Números</h4><div class="tbl-wrap"><table class="cmp-tbl"><thead><tr><th></th>${P.map(q => `<th><i class="ln" style="--c:${q.c}"></i>${esc(q.p.name)}</th>`).join("")}</tr></thead><tbody>${body}</tbody></table></div><p class="adm-note">★ = el mejor en esa fila.</p></div>
         <div class="an-card"><h4>Comparados con la liga <small>percentil de 0 a 100</small></h4>${bars}</div></div>
     </div></div></div>`;
@@ -1797,7 +1815,7 @@ const ROLE_ICON = {
 };
 const roleSvg = r => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ROLE_ICON[r] || ROLE_ICON.Flex}</svg>`;
 function renderTeams() {
-  if (!S.teamSel) S.teamSel = S.my;
+  if (!S.teamSel) {const linked=new URL(location.href).searchParams.get("equipo");S.teamSel=TEAM_KEYS.includes(linked)?linked:S.my;}
   $("#teams").innerHTML = TEAM_KEYS.map(k => { const r = D.real.find(x => x.k === k), t = TM(k);
     return `<button class="tcard cut tilt ${S.teamSel === k ? "on" : ""}" data-t="${k}" aria-pressed="${S.teamSel === k}" style="--tc:${t.c}"><small class="t-pos">${r.pos}°</small>${img(k)}<b>${esc(t.name)}</b><span>${r.pts} pts · ${roster(k).length} jugadores</span></button>`; }).join("");
   const k = S.teamSel, t = TM(k), r = D.real.find(x => x.k === k);
@@ -1807,7 +1825,7 @@ function renderTeams() {
     <div><div class="eyebrow">${r.pos}° en la tabla</div><h3 class="team-name" style="font-size:clamp(22px,3vw,32px);font-family:var(--f-wide);font-weight:400;--tl:${t.l}">${esc(t.name)}</h3><div class="muted" style="font-size:14px">${r.g + r.gp} victorias · ${r.pp + r.p} derrotas · Dif ${r.dif > 0 ? "+" : ""}${r.dif} · K/D ${dec(r.kd)}</div></div>
     <div class="coins cut-s" style="margin-left:auto"><i class="coin"></i>${fmt(t.coins)}</div></div>
     ${coachesOf(k).length ? `<div class="td-coach"><svg class="ic"><use href="#i-whistle"/></svg><span>Coach: <b>${coachesOf(k).map(c => esc(c.name)).join("</b> y <b>")}</b></span><small>${fmt(coachesOf(k).length * coachCfg().salary)} coins de sueldo por semana</small></div>` : ""}
-    <div class="roster">${rs.map(p => `<div class="prow2" style="--tc:${t.c}" data-p="${p.id}" tabindex="0"><span class="ava">${esc(p.name.slice(0, 2).toUpperCase())}</span>
+    <div class="roster">${rs.map(p => `<div class="prow2" style="--tc:${t.c}" data-p="${p.id}" tabindex="0"><onyx-identity pid="${esc(p.id)}"></onyx-identity>
       <div style="min-width:0"><b>${esc(p.name)}</b><small class="role">${roleSvg(p.role)}${p.role}</small></div>
       ${p.id === t.captain ? '<span class="badge c">CAPITÁN</span>' : p.id === t.sub ? '<span class="badge sc">SUBCAPITÁN</span>' : "<span></span>"}
       <span class="mono muted" style="font-size:12px;text-align:right">${p.s.m ? `K/D ${dec(p.s.kd)}<br>ACS ${p.s.acs}` : "Sin partidos"}</span></div>`).join("") || '<p class="muted">Sin jugadores cargados.</p>'}</div>${teamMatchesHtml(k)}`;
@@ -1969,9 +1987,9 @@ $("#ideaList").innerHTML = IDEAS.map(([b, s, h]) => `<a class="idea cut" href="$
 
 /* ================= ADMIN ================= */
 const ADM_TABS = [["inicio","Inicio","Resumen"],["solicitudes","Solicitudes","Resumen"],["partidos","Partidos","Competencia"],["resultados","Resultados","Competencia"],["tabla","Tabla","Competencia"],["playoffs","Playoffs","Competencia"],["mapas","Mapas","Competencia"],
-  ["jugadores","Jugadores","Personas"],["rendimiento","Rendimiento","Personas"],["equipos","Equipos","Personas"],["mercado","Mercado","Personas"],["coaches","Coaches","Personas"],["billeteras","Billeteras","Economía de jugadores"],["recompensas","Recompensas","Economía de jugadores"],["economia","Finanzas de equipos","Economía de equipos"],["fairplay","Fair play","Personas"],
+  ["jugadores","Jugadores","Personas"],["rendimiento","Rendimiento","Personas"],["equipos","Equipos","Personas"],["mercado","Mercado","Personas"],["coaches","Coaches","Personas"],["automatizaciones","Automatizaciones y Discord","Integraciones"],["external","Premios externos","Economía de jugadores"],["storeadmin","ONYX Store","Economía de jugadores"],["billeteras","Billeteras","Economía de jugadores"],["recompensas","Recompensas","Economía de jugadores"],["economia","Finanzas de equipos","Economía de equipos"],["fairplay","Fair play","Personas"],
   ["general","General","Configuración"],["staff","Cuentas y auditoría","Configuración"],["seguridad","Seguridad","Configuración"],["bot","ONYX Bot","Configuración"]];
-const ULTRA_TABS = ["tabla", "general", "staff", "seguridad", "bot"];
+const ULTRA_TABS = ["automatizaciones","storeadmin","tabla", "general", "staff", "seguridad", "bot"];
 const ADM_ICON = {billeteras:"i-wallet",recompensas:"i-gift",inicio: "i-grid", solicitudes: "i-inbox", partidos: "i-calendar", resultados: "i-check", tabla: "i-table", playoffs: "i-trophy", mapas: "i-map", jugadores: "i-users", rendimiento: "i-pulse", equipos: "i-shield", mercado: "i-coins", coaches: "i-whistle", canjes: "i-gift", economia: "i-wallet", fairplay: "i-scale", general: "i-sliders", staff: "i-key", seguridad: "i-lock", bot: "i-bot"};
 const ico = (id, cls = "") => `<svg class="ic ${cls}" aria-hidden="true"><use href="#${id}"/></svg>`;
 const ULTRA_ACTS = new Set(["bk-create","bk-dl","bk-restore","bk-upload","acc-revoke","season-close","po-del","lg-del","coach-del","cj-add","cj-pdel","cj-del","tbl-form","tbl-reset","team-add","team-del","team-hide","team-restore","logo-del","m-del","p-del","tr-del","map-del","map-add","used-reset-all","wipe-results","wipe-players","wipe-market","ex-copy","window-new","acc-add","acc-reset","acc-del","fixture-gen","fx-open","fecha-del","fecha-del-all","cap-add","cap-reset","cap-del","acc-import"]);
@@ -2003,10 +2021,10 @@ function renderAdmin() {
   if (root.contains(ae) && ae.matches("input,select,textarea")) { S.adm.dirty = true; return; }
   const body = $(".adm-body", root), scroll = body ? body.scrollTop : 0;
   const R = RM(), Dr = deriveFor(R);
-  const tabHtml = {billeteras:()=>'<div class="adm-card"><h3>Billeteras de jugadores</h3><onyx-wallet mode="staff"></onyx-wallet></div>',recompensas:R=>'<div class="adm-card"><h3>Premiar participación</h3><onyx-wallet mode="match"></onyx-wallet></div>'+(isUltra()?'<div class="adm-card"><button class="btn" data-social-open="admin">Editar catálogo cosmético y Premium</button></div>':'')+admCanjes(R),inicio: admInicio, solicitudes: admSolicitudes, rendimiento: admRendimiento, partidos: admPartidos, jugadores: admJugadores, tabla: admTabla, equipos: admEquipos, mercado: admMercado, mapas: admMapas, fairplay: admFair, general: admGeneral, staff: admStaff, bot: admBot, canjes: admCanjes, coaches: admCoaches, resultados: admResultados, playoffs: admPlayoffs, economia: admEconomia, seguridad: admSeguridad}[S.adm.tab](R, Dr);
+  const tabHtml = {external:()=>'<div class="adm-card"><h3>Premios externos y entregas</h3><onyx-external></onyx-external></div>',automatizaciones:()=>'<div class="adm-card"><h3>Automatizaciones y Discord</h3><onyx-ops></onyx-ops></div>',storeadmin:()=>'<div class="adm-card"><h3>Gestión de ONYX Store</h3><button class="btn" data-social-open="admin">Catálogo, paquetes y Premium</button><onyx-orders></onyx-orders></div>',billeteras:()=>'<div class="adm-card"><h3>Billeteras de jugadores</h3><onyx-wallet mode="staff"></onyx-wallet></div>',recompensas:R=>'<div class="adm-card"><h3>Premiar participación</h3><onyx-wallet mode="match"></onyx-wallet></div>'+(isUltra()?'<div class="adm-card"><button class="btn" data-social-open="admin">Editar catálogo cosmético y Premium</button></div>':'')+admCanjes(R),inicio: admInicio, solicitudes: admSolicitudes, rendimiento: admRendimiento, partidos: admPartidos, jugadores: admJugadores, tabla: admTabla, equipos: admEquipos, mercado: admMercado, mapas: admMapas, fairplay: admFair, general: admGeneral, staff: admStaff, bot: admBot, canjes: admCanjes, coaches: admCoaches, resultados: admResultados, playoffs: admPlayoffs, economia: admEconomia, seguridad: admSeguridad}[S.adm.tab](R, Dr);
   const cnt = admCounts(), badge = {solicitudes: cnt.req, mercado: cnt.off, fairplay: cnt.rep, canjes: cnt.cj, coaches: cnt.sal, resultados: cnt.res};
   let lastG = "";
-  const tabsHtml = ADM_TABS.filter(([k]) => (isUltra() || !ULTRA_TABS.includes(k)) && (k !== "bot" || isBotAdmin())).map(([k, l, g]) => { const head = g !== lastG ? `<span class="grp">${g}</span>` : ""; lastG = g;
+  const tabsHtml = ADM_TABS.filter(([k]) => (isUltra() || !ULTRA_TABS.includes(k)) && (k !== "external" || isUltra() || S.staff?.role==="admin") && (k !== "bot" || isBotAdmin())).map(([k, l, g]) => { const head = g !== lastG ? `<span class="grp">${g}</span>` : ""; lastG = g;
     return `${head}<button class="${S.adm.tab === k ? "on" : ""}" data-act="tab:${k}">${ico(ADM_ICON[k] || "i-grid")}<span>${l}</span>${badge[k] ? `<span class="tab-badge">${badge[k]}</span>` : ""}</button>`; }).join("");
   const again = !!root.querySelector(".adm");
   root.innerHTML = `<div class="adm ${isUltra() ? "is-ultra" : ""} ${again ? "noanim" : ""}" role="dialog" aria-modal="true" aria-label="Panel de administración"><div class="adm-panel">
@@ -2588,14 +2606,14 @@ function admStaff() {
   const np = S.adm.newPw ? `<div class="ex-banner cut-s" style="margin:0"><span><b>CONTRASEÑA NUEVA</b> &nbsp;Usuario <span class="mono" style="color:#fff">${esc(S.adm.newPw.u)}</span> · contraseña <span class="mono" style="color:#fff;font-size:16px;user-select:all">${esc(S.adm.newPw.p)}</span>. Copiala ahora: no se vuelve a mostrar.</span><button class="btn sm" data-act="copy-pw">Copiar</button></div>` : "";
   const rows = users.map(a => `<div class="prow3" style="grid-template-columns:minmax(110px,1fr) minmax(130px,1fr) auto auto auto;align-items:center">
       <span class="mono" style="font-size:14px;color:#fff">${esc(a.u)}${S.staff && S.staff.uid === a.uid ? ' <span class="muted" style="font-size:11px">(vos)</span>' : ""}</span>
-      <select class="cell-in" data-bind="acc:${a.uid}:role" data-t="s" aria-label="Rol de ${esc(a.u)}">${opt("staff", "Staff", a.role !== "ultra")}${opt("ultra", "Ultra staff", a.role === "ultra")}</select>
+      <select class="cell-in" data-bind="acc:${a.uid}:role" data-t="s" aria-label="Rol de ${esc(a.u)}">${opt("staff", "Staff", a.role === "staff")}${opt("admin","Admin",a.role==="admin")}${opt("ultra", "Ultra staff", a.role === "ultra")}</select>
       <span class="chk"><input type="checkbox" ${a.active !== false ? "checked" : ""} data-bind="acc:${a.uid}:active" data-t="b">Activa</span>
       <button class="btn sm ghost" data-act="acc-reset:${a.uid}">Nueva contraseña</button><button class="btn sm danger" data-act="acc-del:${a.uid}">Borrar</button></div>`).join("");
   const us = [...new Set(S.audit.map(x => x.u))].sort();
   return `${np}<div class="adm-card"><h3>Cuentas de staff <small>${users.length} cuentas · ${ultraCount(users)} ultra staff activos</small></h3>
       <p class="adm-note">Las contraseñas las guarda Firebase cifradas; nadie las puede ver. Si alguien se olvida la suya, generale una nueva.</p>
       <div class="ptable">${rows || '<p class="adm-note">No hay cuentas.</p>'}</div>
-      <div class="rowbtns"><input class="cell-in" id="accNew" placeholder="nuevo usuario" style="max-width:200px" autocomplete="off"><select class="cell-in" id="accRole" style="max-width:160px">${opt("staff", "Staff", true)}${opt("ultra", "Ultra staff", false)}</select><button class="btn sm gold" data-act="acc-add">Crear cuenta</button></div></div>
+      <div class="rowbtns"><input class="cell-in" id="accNew" placeholder="nuevo usuario" style="max-width:200px" autocomplete="off"><select class="cell-in" id="accRole" style="max-width:160px">${opt("staff", "Staff", true)}${opt("admin","Admin",false)}${opt("ultra", "Ultra staff", false)}</select><button class="btn sm gold" data-act="acc-add">Crear cuenta</button></div></div>
     ${admCaptains()}
     <div class="adm-card"><h3>Registro de auditoría <small>últimos 400 cambios · nadie lo puede editar ni borrar</small></h3>
       <div class="rowbtns"><select class="cell-in" id="auU" style="max-width:200px" aria-label="Filtrar por staff">${opt("all", "Todo el staff", S.adm.auU === "all")}${us.map(u => opt(u, u, S.adm.auU === u)).join("")}</select><input class="cell-in" id="auQ" placeholder="Buscar en los cambios" value="${esc(S.adm.auQ)}" style="max-width:280px" autocomplete="off"></div>
@@ -4877,7 +4895,7 @@ function openMatch(mid) {
     return `<div class="mc-box" style="--tc:${t.c}"><div class="mc-bh">${img(k)}<b>${esc(t.name)}</b></div><table class="mc-tbl"><thead><tr><th>Jugador</th><th>ACS</th><th>K</th><th>D</th><th>A</th><th>K/D</th></tr></thead><tbody>
       ${rows.map(r => `<tr ${r.p ? `data-p="${r.pid}" tabindex="0"` : ""}><td>${r.pid === m.mvpId ? '<i class="mc-mvp" title="MVP">MVP</i>' : ""}${esc(r.p ? r.p.name : "Jugador borrado")}</td><td><b>${r.acs}</b></td><td>${r.k}</td><td>${r.d}</td><td>${r.a}</td><td class="${r.k >= r.d ? "kdp" : "kdn"}">${dec(r.d ? r.k / r.d : r.k)}</td></tr>`).join("") || '<tr><td colspan="6" class="muted">Sin estadísticas cargadas.</td></tr>'}</tbody></table></div>`; };
   const h2h = D.played.filter(x => x.id !== m.id && ((x.a === m.a && x.b === m.b) || (x.a === m.b && x.b === m.a))).slice(-4);
-  const pre = !played ? `<div class="mc-pre"><div><div class="h3" style="font-size:15px">Planteles</div><div class="mc-rosters">${[m.a, m.b].map(k => `<div style="--tc:${TM(k).c}">${roster(k).map(p => `<button type="button" class="mc-pl" data-p="${p.id}"><b>${esc(p.name)}</b><small>${esc(p.role)}${p.s.m ? ` · ${p.s.acs} ACS` : ""}</small></button>`).join("") || '<span class="muted">Sin jugadores</span>'}</div>`).join("")}</div></div>
+  const pre = !played ? `<div class="mc-pre"><div><div class="h3" style="font-size:15px">Planteles</div><div class="mc-rosters">${[m.a, m.b].map(k => `<div style="--tc:${TM(k).c}">${roster(k).map(p => `<button type="button" class="mc-pl" data-p="${p.id}"><onyx-identity pid="${esc(p.id)}"></onyx-identity><b>${esc(p.name)}</b><small>${esc(p.role)}${p.s.m ? ` · ${p.s.acs} ACS` : ""}</small></button>`).join("") || '<span class="muted">Sin jugadores</span>'}</div>`).join("")}</div></div>
       ${h2h.length ? `<div><div class="h3" style="font-size:15px">Se enfrentaron antes</div><div class="mc-h2h">${h2h.map(x => `<button type="button" data-mid="${x.id}"><span>F${x.fecha}${legTag(x)}</span><b>${esc(TM(x.a).name)} ${x.ra}-${x.rb} ${esc(TM(x.b).name)}</b></button>`).join("")}</div></div>` : ""}</div>` : "";
   modal(`<div class="box cut mc" style="--tc:${A.c};--tc2:${B.c}"><div class="mc-head"><button class="x" data-close aria-label="Cerrar">×</button>
       <div class="mc-meta">${esc(M.cfg.season)} · Fecha ${m.fecha}${legLbl(m) ? " · " + legLbl(m) : ""}${m.date ? " · " + fmtDate(m.date) : ""}</div>
@@ -5560,7 +5578,7 @@ renderAll();
 setInterval(tickClock, 1000);
 initShell();
 initFirebase();
-window.onyxWallet={api, identity:()=>({uid:AUTH?.currentUser?.uid||"",pid:S.member?.pid||"",staff:!!S.staff}),players:()=>Object.entries(S.remote.players||{}).map(([id,p])=>({id,name:p.name||id})),matches:()=>Object.entries(S.remote.matches||{}).filter(([,m])=>m.status==="played"&&Object.keys(m.stats||{}).length).map(([id,m])=>({id,name:"Fecha "+m.fecha+" · "+m.a+" vs. "+m.b,count:Object.keys(m.stats).length})),prizes:()=>prizeList().filter(p=>p.active!==false&&p.pts>0),login:()=>openAccount(),member:()=>goView("perfil")};
+window.onyxWallet={api,rosterEntry:id=>S.remote.players[id]||{}, identity:()=>({uid:AUTH?.currentUser?.uid||"",pid:S.member?.pid||"",staff:!!S.staff}),players:()=>Object.entries(S.remote.players||{}).map(([id,p])=>({id,name:p.name||id})),matches:()=>Object.entries(S.remote.matches||{}).filter(([,m])=>m.status==="played"&&Object.keys(m.stats||{}).length).map(([id,m])=>({id,name:"Fecha "+m.fecha+" · "+m.a+" vs. "+m.b,count:Object.keys(m.stats).length})),prizes:()=>prizeList().filter(p=>p.active!==false&&p.pts>0),login:()=>openAccount(),member:()=>goView("perfil")};
 window.onyxProfiles={api,me:()=>myPid(),ultra:isUltra,scout:openAnalysis,players:()=>M&&!M.ex?D.P.map(p=>({id:p.id,name:p.name})):[],player:id=>{const p=D?.PM[id];if(!p||M.ex)return null;const raw=S.remote.players[id]||{},r=raw.recruitment||{},v=vsOf(id);return {percentiles:p.s.m?pcsOf(metricsOf(p),scLeague()):null,name:p.name,team:p.team?TM(p.team).name:"Agente libre",ign:ignOf(id),role:r.principal||p.role,secondary:r.secundario||null,agents:r.agentes||null,rank:v?.rank||raw.rank||null,peak:v?.peak?.rank||r.peak||null,country:r.pais,hours:r.horarios,flex:r.flex,joined:raw.joinedAt||null,v,seasons:Object.values(S.remote.seasons||{}).filter(s=>s.players?.[id]).map(s=>({name:s.name,stats:s.players[id],awards:Object.values(s.awards||{}).filter(a=>a.id===id).map(a=>a.label)})),points:(perfOf(id).pts||[]).filter(x=>x.id!=="carry"&&x.v>0).map(x=>({at:x.at,v:x.v})),log:p.log.map(x=>({...x,map:S.remote.matches[x.mid]?.map||null,agent:S.remote.matches[x.mid]?.stats?.[id]?.agent||null,extra:Object.fromEntries(["adr","kast","hs","firstBloods","aces","clutches","teamMvp"].map(k=>[k,S.remote.matches[x.mid]?.stats?.[id]?.[k]]))})),s:p.s,mvps:D.played.filter(m=>m.mvpId===id).length,transfers:M.transfers.filter(t=>t.pid===id).sort((a,b)=>b.at-a.at),awards:AWARD_KINDS.filter(([k])=>M.cfg.awards?.[k]===id).map(x=>x[1])};}};
 finishDiscordLogin();
 })();

@@ -63,7 +63,7 @@ test("las fases de una oferta, ejecución atómica y anuncios de disponibilidad 
   assert.equal(db._get("players/"+pid).team,null);assert.deepEqual(new Set(d.member.roles),new Set(ids));
   assert.equal(d.sent.at(-1).channel,freeChannel);assert.equal(d.sent.at(-1).embeds[0].fields[0].value,"<@"+id+">");
   for(const job of released.jobs)await work(db,job,{call:d.call});
-  assert.equal(d.sent.length,3);
+  assert.equal(d.sent.length,4);
 });
 test("ausencia, ingreso detectado tras reinicio, jerarquía y resincronización sin asignar dos veces",async()=>{
   const db=setup(),d=discord();
@@ -174,4 +174,17 @@ test("la sincronización de roles no demora el anuncio de un jugador libre",asyn
   await db.runTransaction(tx=>queue(tx,db,"freeNew","free",{pid,rid:id,version:0}));
   await work(db,"freeNew",{call:d.call});
   assert.equal(d.sent.length,1);assert.equal(d.sent[0].channel,freeChannel);
+});
+test("intercambio crea un anuncio y conserva la economía personal",async()=>{
+ const db=setup();await db.doc("players/"+pid).update({team:"onyx"});await db.doc("teams/orion").set({name:"ORION"});await db.doc("players/second").set({name:"B",team:"orion"});
+ await db.doc("socialprofiles/"+pid).set({owned:["frame-18"]});
+ const b={action:"swap",pid,other:"second",key:"swap-once",teams:["onyx","orion"],versions:[0,0]};
+ const r=await market(db,staff,b);const jobs=r.jobs.filter(k=>k.startsWith("swap_"));assert.equal(jobs.length,1);
+ const d=discord();await work(db,jobs[0],{call:d.call});assert.equal(d.sent[0].embeds[0].title,"🤝 INTERCAMBIO OFICIAL");assert.equal(db._get("players/second").team,"onyx");
+ assert.deepEqual((await market(db,staff,b)).jobs,[]);assert.deepEqual(db._get("socialprofiles/"+pid).owned,["frame-18"]);
+});
+test("evento cancelado no se reactiva y 429 respeta el reintento largo",async()=>{
+ const db=setup(),d=discord();await db.doc("communityjobs/stop").set({kind:"transfer",pid,state:"cancelled",next:0});await work(db,"stop",{manual:true,call:d.call});assert.equal(d.sent.length,0);
+ await db.doc("communityjobs/limit").set({kind:"transfer",pid,state:"pending",next:0,attempt:0,to:"onyx",version:1,at:100});
+ await work(db,"limit",{now:()=>100,call:async()=>{throw Object.assign(Error("Límite"),{status:429,body:{retry_after:160}});}});assert.equal(db._get("communityjobs/limit").next,160100);
 });

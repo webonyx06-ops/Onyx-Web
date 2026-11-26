@@ -1,0 +1,13 @@
+:root{--league-canvas:#101016;--league-surface:#191921;--league-edge:#383643;--league-gold:#edc97f;--league-ink:#f5f3ed;--league-muted:#b7b6c1;--league-gap:clamp(14px,2.1vw,28px);--league-radius:12px;--league-focus:#f3cf87;color-scheme:dark}
+:where(button,a,input,select,textarea,summary):focus-visible{outline:2px solid var(--league-focus);outline-offset:3px}
+:where(dialog,.adm-card,.panel,.wallet-panel,.table-wrap){border-color:var(--league-edge)}
+:where(dialog,.adm-card,.wallet-panel) :where(label,p,output){line-height:1.5}
+:where(.sec-head,.adm-card,.wallet-panel) :where(h2,h3){text-wrap:balance;letter-spacing:-.026em}
+:where(.scout-fields,onyx-external form){display:grid;grid-template-columns:repeat(auto-fit,minmax(min(160px,100%),1fr));gap:12px}
+onyx-external{display:grid;gap:16px}onyx-external label{display:grid;gap:5px}onyx-external input,.scout-fields input{font:inherit;border:1px solid var(--league-edge);padding:9px;border-radius:8px;color:var(--league-ink);background:var(--league-canvas)}
+:where(.st-card,.pcard,.tcard){transition:border-color .18s,transform .18s}
+.kind-theme .art{aspect-ratio:1.7}.kind-badge .art img,.kind-stars .art img{width:78%}.kind-banner .art img{object-fit:cover}.st-confirmed{border-inline-start:3px solid var(--league-gold);padding:8px 12px}
+@media(prefers-reduced-motion:no-preference){.view:not([hidden])>.sec-head,.adm-card,.store-dialog[open] .st-profile{animation:league-arrive .22s ease-out both}.st-confirmed{animation:league-award .45s ease-out}.kind-effect .art:is(:hover,:focus-visible) img{animation:league-arrive .9s ease-in-out infinite alternate}@keyframes league-arrive{from{opacity:.15;transform:translateY(5px)}}@keyframes league-award{from{background:#5c492b;transform:translateY(4px)}to{background:transparent}}}
+html[data-low-motion] *,html[data-low-motion] *::before,html[data-low-motion] *::after{scroll-behavior:auto!important;animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{scroll-behavior:auto!important;animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}}
+@media(max-width:620px){:where(.adm-card,.wallet-panel){padding:14px}:where(.scout-fields,onyx-external form){grid-template-columns:1fr 1fr}.st-tools{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}.st-tools input,.st-tools input[type=search],.st-tools select{width:100%;min-width:0}}

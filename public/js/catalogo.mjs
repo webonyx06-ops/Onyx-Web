@@ -1,13 +1,14 @@
+import {ornament} from "./ornamentos.mjs";
 export const collections = ["ONYX Classic","Royal Gold","Crimson","Phantom","Frozen","Galaxy","Cyberpunk","Emerald","Obsidian","Inferno","Electric","Sakura","Void","Solar","Lunar","Diamond","Toxic","Retro Arcade","Celestial","Neon Night"];
 export const colors = ["ad77ff","f2bc59","ff526a","a4b5ce","82e8ff","b791ff","fb72db","53e1a6","a9a3bd","ff8253","62e4ff","ffadc9","ac83df","ffd66c","d6e1ff","96f1ff","afe957","ff91b4","a9bdff","ed68ff"];
 const marks=["⬢","♛","⚔","◈","❄","✧","⌁","❖","◆","♨","ϟ","✿","◎","☀","☾","◇","✣","▦","✶","≋"];
-export const categories={banner:"Banner",frame:"Marco",badge:"Insignia",title:"Título",label:"Etiqueta",theme:"Tema",effect:"Efecto",avatar:"Avatar",stars:"Estrellas"};
-const designs={banner:["Horizonte","Eclipse","Vanguardia"],frame:["Órbita","Bastión"],badge:["Sello","Blasón","Emblema","Sigilo"],title:["Guardián","The Wanderer","Heraldo"],label:["Pulso","Eco"],theme:["Atmósfera"],effect:["Destello","Estela"],avatar:["Centinela","Espectro"],stars:["Constelación"]};
-const counts=[60,40,80,60,30,20,25,30,15],free=[10,5,10,10,5,3,0,10,0];
+export const categories={banner:"Banner",frame:"Marco",badge:"Insignia",title:"Título",label:"Etiqueta",theme:"Tema",effect:"Efecto",avatar:"Avatar",stars:"Estrellas",decoration:"Decoración de avatar"};
+const designs={banner:["Horizonte","Eclipse","Vanguardia"],frame:["Órbita","Bastión"],badge:["Sello","Blasón","Emblema","Sigilo"],title:["Guardián","The Wanderer","Heraldo"],label:["Pulso","Eco"],theme:["Atmósfera"],effect:["Destello","Estela"],avatar:["Centinela","Espectro"],stars:["Constelación"],decoration:["Ornamento"]};
+const counts=[60,40,80,60,30,20,25,30,15,20],free=[10,5,10,10,5,3,0,10,0,2];
 export const rarities=["Gratis","Común","Poco común","Raro","Épico","Legendario","Exclusivo"];
 export const base=Object.keys(categories).flatMap((category,k)=>Array.from({length:counts[k]},(_,n)=>{
  const motif=n%20,variant=Math.floor(n/20),collection=collections[motif],type=designs[category][variant];
- const r=n<free[k]?0:1+(n+k+variant)%6;
+ const r=n<free[k]?0:Math.min(6,({title:1,label:1,badge:2,stars:2,avatar:3,banner:3,decoration:4,frame:4,effect:4,theme:5})[category]+(variant>0&&["banner","frame","effect"].includes(category)?1:0)+(motif===19&&["effect","theme","decoration"].includes(category)?1:0));
  return {id:category+"-"+(n+1),category,collection,motif,variant,name:type+" · "+collection,description:categories[category]+" de la serie "+collection,rarity:rarities[r],price:[0,25,55,95,160,275,425][r],premium:r<6||motif===19,premiumOnly:motif===19&&["theme","effect"].includes(category),duration:"Permanente al canjear",active:true,featured:motif<3};
 }));
 export const defaults={discount:15,studio:175,music:200,discord:250,days30:350,days90:850,days365:2500};
@@ -29,7 +30,8 @@ export function art(i){
  const ring='<polygon points="'+poly(5+n%6,47,n/4)+'" fill="none" stroke="'+c+'" stroke-width="3"/>';
  const backdrop='<rect width="180" height="112" fill="#151320"/><g opacity=".38" stroke="'+c+'" fill="none">'+pattern+'</g>';
  let body=backdrop;
- if(cat==="frame"){body=ring+'<circle cx="90" cy="56" r="41" fill="none" stroke="'+c+'" stroke-dasharray="'+(4+n)+' '+(4+v*7)+'"/>'+seal(90,v?12:97,.29);}
+ if(cat==="decoration"){const side=n%2?-1:1;body=ornament(n,c)+'<g transform="translate(90 56) scale('+side+' 1)" fill="none" stroke="'+c+'" stroke-width="2"><path d="M-43 24Q-62 -7 -34 -37M-47 12Q-64 -13 -50 -32M26 39Q52 32 49 2"/><path d="m-43-32-7-8 12 3m-11 15-10-7 11 1m91 52 11-10-3 11" fill="'+c+'"/></g>'+seal(90-side*40,29,.43)+seal(90+side*43,81,.28);}
+ else if(cat==="frame"){const ornaments=Array.from({length:4+n%4},(_,j)=>{const a=j*2*Math.PI/(4+n%4);return seal(90+43*Math.cos(a),56+43*Math.sin(a),v?.32:.23);}).join("");body=ornament(n,c)+ornaments+ring+'<circle cx="90" cy="56" r="41" fill="none" stroke="'+c+'" stroke-dasharray="'+(4+n)+' '+(4+v*7)+'"/>'+seal(90,v?12:97,.29);}
  else if(cat==="badge")body+= '<polygon points="'+poly(3+v,40,-1.57)+'" fill="#211e2e" stroke="'+c+'"/>'+seal(90,56,.94);
  else if(cat==="avatar")body+= '<circle cx="90" cy="55" r="40" fill="#201c2e" stroke="'+c+'"/>'+seal(90,55,1.2)+(v?'<path d="m61 78 29 12 29-12" fill="none" stroke="'+c+'"/>':"");
  else if(cat==="stars")body+=Array.from({length:3+n%5},(_,j)=>seal(18+j*145/(2+n%5),55+14*Math.sin(j+n),.36)).join("");

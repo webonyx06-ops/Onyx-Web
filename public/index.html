@@ -26,7 +26,7 @@
 <link rel="stylesheet" href="css/styles.css">
 <script>try { if (JSON.parse(localStorage.getItem("liga-t1:side")) === true) document.documentElement.classList.add("side-mini"); } catch (e) {}</script>
 <link rel="stylesheet" href="css/league.css">
-<link rel="stylesheet" href="css/perfiles.css"></head>
+<link rel="stylesheet" href="css/perfiles.css"><link rel="stylesheet" href="/css/league-system.css"><script defer src="/js/league-preferences.js"></script></head>
 <body>
 <svg xmlns="http://www.w3.org/2000/svg" width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
   <symbol id="i-home" viewBox="0 0 24 24"><path d="M3.5 10.6 12 3.8l8.5 6.8"/><path d="M5.5 9.2V20h4.8v-5.4h3.4V20h4.8V9.2"/></symbol>
@@ -349,6 +349,7 @@
 
   <!-- PREMIOS -->
   <section class="sec view" id="premios" data-title="Premios">
+<onyx-store></onyx-store>
     <div class="sec-head">
       <div><div class="crumb"><svg class="ic"><use href="#i-trophy"/></svg><span>Liga</span></div><h2>MVP y mejores por rol</h2>
         <p>Pasá el mouse (o tocá) para ver los números y el criterio de cada premio.</p></div>
@@ -391,10 +392,10 @@
           <div class="seg" id="mkCat"><button class="on" data-c="all">Todos</button><button data-c="S">S</button><button data-c="A">A</button><button data-c="B">B</button><button data-c="C">C</button></div>
           <div class="field"><label for="mkRole">Rol</label><select id="mkRole"><option value="all">Todos</option></select></div>
           <div class="field"><label for="mkTeam">Equipo</label><select id="mkTeam"><option value="all">Todos</option><option value="free">Agentes libres</option></select></div>
-          <div class="field"><label for="mkSort">Orden</label><select id="mkSort"><option value="v">Valor</option><option value="acs">ACS</option><option value="kd">K/D</option></select></div>
+          <div class="field"><label for="mkSort">Orden</label><select id="mkSort"><option value="v">Valor</option><option value="acs">ACS</option><option value="kd">K/D</option><option value="win">Victorias</option><option value="recent">ACS reciente</option><option value="games">Experiencia</option><option value="adr">ADR ranked</option><option value="kast">KAST</option></select></div>
           <div class="field" style="flex:1;min-width:150px"><label for="mkQ">Buscar</label><input id="mkQ" placeholder="Nombre" autocomplete="off"></div>
         </div>
-        <div class="cards" id="cards"></div>
+        <details id="scoutFilters"><summary>Filtros de scouting</summary><div class="scout-fields"><label>Rango actual<input name="rank" type="search" ></label><label>Peak elo<input name="peak" type="search" ></label><label>Rol secundario<input name="secondary" type="search" ></label><label>Agentes<input name="agents" type="search" ></label><label>Horarios disponibles<input name="hours" type="search" ></label><label>K/D mínimo<input name="kd" type="number" min="0" step="any"></label><label>ACS mínimo<input name="acs" type="number" min="0" step="any"></label><label>ADR ranked mínimo<input name="adr" type="number" min="0" step="any"></label><label>KAST mínimo (%)<input name="kast" type="number" min="0" step="any"></label><label>Victorias mínimas (%)<input name="win" type="number" min="0" step="any"></label><label>Partidos jugados mínimos<input name="games" type="number" min="0" step="any"></label><label>ACS últimas tres partidas (mín.)<input name="recent" type="number" min="0" step="any"></label><label><input type="checkbox" name="saved"> Solo favoritos</label><button type="button" id="clearScout">Limpiar filtros de scouting</button></div></details><label><input type="checkbox" onchange="document.body.classList.toggle('scouting',this.checked)"> Modo scouting</label><div class="cards" id="cards"></div>
       </div>
       <div class="mk-side">
         <div class="panel pad cut"><div class="h3">Tus ofertas</div><div id="myOffers" style="display:grid;gap:6px;margin-top:12px"></div></div>
@@ -621,6 +622,6 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <script src="js/firebase-config.js"></script>
-<script src="js/app.js"></script><script type="module" src="js/perfiles.mjs"></script><script type="module" src="js/billetera.mjs"></script>
+<link rel="stylesheet" href="/css/store.css"><script type="module" src="/js/store.mjs"></script><script src="js/app.js"></script><script type="module" src="js/perfiles.mjs"></script><script type="module" src="js/billetera.mjs"></script>
 </body>
 </html>
