@@ -82,7 +82,9 @@ service cloud.firestore {
     // Asistencia, skills y puntos individuales: todos ven, el staff carga
     match /perf/{pid} {
       allow read: if true;
-      allow write: if isStaff();
+      allow create: if isUltra() || isStaff() && !request.resource.data.keys().hasAny(['pts']);
+      allow update: if isUltra() || isStaff() && !changed().hasAny(['pts']);
+      allow delete: if isUltra();
     }
 
     // Ofertas: solo capitanes, cada uno en su documento y por su equipo; las ven solo capitanes y staff
@@ -174,8 +176,8 @@ service cloud.firestore {
     }
     match /redeems/{id} {
       allow read: if true;
-      allow create: if isStaff() || (isCaptain() && validRedeem() && ('coach' in request.resource.data || request.resource.data.method == 'usd'));
-      allow update: if isStaff();
+      allow create: if isUltra() || isStaff() && (request.resource.data.get('method', '') != 'pts' || 'coach' in request.resource.data) || (isCaptain() && validRedeem() && ('coach' in request.resource.data || request.resource.data.method == 'usd'));
+      allow update: if isUltra() || isStaff() && (resource.data.get('method','') != 'pts' || 'coach' in resource.data) && !changed().hasAny(['pid','pts','method','coach']) || isStaff() && changed().hasOnly(['delivered']);
       allow delete: if isUltra() || (isCaptain() && resource.data.by == request.auth.uid && resource.data.status == 'pend');
     }
 

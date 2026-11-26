@@ -5,7 +5,7 @@ export const guild="1550607388267122788", freeChannel="1575217513476657162", tra
 export const fail=(status,message)=>{throw Object.assign(new Error(message),{status});};
 export const digest=value=>createHash("sha256").update(value).digest("hex").slice(0,24);
 export function queue(tx,db,id,kind,data){
-  tx.set(db.doc("communityjobs/"+id),{kind,...data,state:"pending",next:0,attempt:0,at:Date.now(),...(kind==="roles"?{}:{deliveryUncertain:false})});
+  tx.set(db.doc("communityjobs/"+id),{kind,...data,...(kind==="roles"?{}:{channel:kind==="free"?freeChannel:transferChannel}),state:"pending",next:0,attempt:0,at:Date.now(),...(kind==="roles"?{}:{deliveryUncertain:false})});
 }
 export async function membership(call,id){
   if(!snowflake(id))return null;
@@ -47,23 +47,26 @@ async function announcement(db,call,key,j,p,member){
   const ref=db.doc("marketposts/"+j.pid);
   const prev=(await ref.get()).data();
   if(free && (p.team || (p.marketVersion||0)!==(j.version||0)))return;
-  if(!free && !j.to)return;
+  
   const channel=await call("GET","/channels/"+ch);
   if(channel.guild_id!==guild)fail(403,"El canal "+ch+" no pertenece a ONYX.");
   const display=member?"<@"+member.user.id+">":safeName(j.name||p.name);
   const field=(name,value)=>({name,value,inline:true});
   const embed=free?{title:"🟢 NUEVO JUGADOR LIBRE",fields:[field("Jugador",display),field("Rango",safeName(p.rank)),field("Posición",safeName(p.role))]}:
-    {title:j.from?"🔄 TRASPASO OFICIAL":"✍️ NUEVO FICHAJE OFICIAL",fields:[field("Jugador",display),field("Procedencia",safeName(j.fromName||"Agente libre")),field("Nuevo equipo",safeName(j.toName||j.to)),field("Estado","✅ Confirmado")],thumbnail:{url:env().site+"/api/logo/"+encodeURIComponent(j.to)},footer:{text:"ONYX Leagues | Mercado de fichajes"}};
+    {title:!j.to?"📤 BAJA OFICIAL":j.from?"🔄 TRASPASO OFICIAL":"✍️ NUEVO FICHAJE OFICIAL",fields:[field("Jugador",display),field("Procedencia",safeName(j.fromName||"Agente libre")),field("Nuevo equipo",safeName(j.toName||j.to||"Agente libre")),field("Estado","✅ Confirmado")],thumbnail:{url:env().site+"/api/logo/"+encodeURIComponent(j.to||j.from)},footer:{text:"ONYX Leagues | Mercado de fichajes"}};
+  if(j.swap){embed.title="🤝 INTERCAMBIO OFICIAL";embed.fields=[field(j.fromName,display),field(j.toName,safeName(j.otherName)),field("Estado","Confirmado")];}
   embed.color=0x984bfa;
-  embed.url=env().site+"/#mercado-"+key;
+  const legacyUrl=env().site+"/#mercado-"+key;
+  embed.url=env().site+"/?jugador="+encodeURIComponent(j.pid)+"&movimiento="+encodeURIComponent(key)+"#mercado";
+  if(!free){const team=j.to||j.from;if(team)embed.description="[Ver equipo]("+env().site+"/?equipo="+encodeURIComponent(team)+"#equipos)";}
   // If Discord accepted the POST but the function stopped before Firestore acknowledged it,
   // recover the original message even after Discord's nonce window expires.
   let message=j.message?{id:j.message}:null;
   if(!message && j.attempt && j.deliveryUncertain!==false){
-    let before="";
+    const author=env().appId||(await call("GET","/users/@me")).id;let before="";
     for(;;){
       const batch=await call("GET","/channels/"+ch+"/messages?limit=100"+(before?"&before="+before:""));
-      message=batch.find(m=>m.author?.id===env().appId && m.embeds?.some(e=>e.url===embed.url));
+      message=batch.find(m=>m.author?.id===author && m.embeds?.some(e=>e.url===embed.url||e.url===legacyUrl));
       if(message || batch.length<100 || Date.parse(batch.at(-1).timestamp)<j.at-60000)break;
       before=batch.at(-1).id;
     }
@@ -88,7 +91,7 @@ export async function work(db,key,{call=api,now=Date.now,manual=false}={}){
   const ref=db.doc("communityjobs/"+key),token=randomUUID();
   const j=await db.runTransaction(async tx=>{
     const j=(await tx.get(ref)).data();
-    if(!j || j.state==="done" || j.next>now() && (j.state==="sending" || !manual))return;
+    if(!j || ["done","cancelled"].includes(j.state) || j.state==="failed"&&!manual || j.next>now() && (j.state==="sending" || !manual))return;
     const lock=db.doc("communitylocks/"+(j.kind==="roles"?"role_":"")+j.pid);
     if(((await tx.get(lock)).data()?.until||0)>now())return;
     tx.set(lock,{until:now()+180000,token});
@@ -99,7 +102,7 @@ export async function work(db,key,{call=api,now=Date.now,manual=false}={}){
     const lock=db.doc("communitylocks/"+(j.kind==="roles"?"role_":"")+j.pid);
     const [current,locked]=await tx.getAll(ref,lock);
     if(locked.data()?.token===token)tx.delete(lock);
-    if(current.data()?.token===token)tx.update(ref,{state,next:state==="done"?0:now()+Math.min(3600000,60000*2**Math.min(j.attempt,6)),...extra});
+    if(current.data()?.token===token)tx.update(ref,{state,updatedAt:now(),next:["done","failed","cancelled"].includes(state)?0:now()+Math.min(3600000,60000*2**Math.min(j.attempt,6)),...extra});
   });
   try{
     if(env().guildId!==guild)fail(409,"Revisá DISCORD_GUILD_ID.");
@@ -107,7 +110,7 @@ export async function work(db,key,{call=api,now=Date.now,manual=false}={}){
     if(!player){await finish("done");return;}
     const rid=j.rid || player.recruitId;
     const row=rid?(await db.doc("recruits/"+rid).get()).data():null;
-    if(j.kind!=="transfer" && (!row?.paid || row.status!=="approved")){await finish("done");return;}
+    if(((j.kind==="free" && rid)||j.kind==="roles") && (!row?.paid || row.status!=="approved")){await finish("done");return;}
     const uid=row?.discordId || (snowflake(rid)?rid:player.discord);
     let member;
     try {member=await membership(call,uid);}
@@ -131,7 +134,11 @@ export async function work(db,key,{call=api,now=Date.now,manual=false}={}){
       await finish("done",{message:message||null,error:null});return;
     }
     await finish("done",{error:null,roles:(await db.doc("recruits/"+rid).get()).data()?.roleIds||[]});
-  }catch(e){await finish("retry",{error:String(e.message).slice(0,250),lastErrorAt:now()});}
+  }catch(e){
+    const permanent=e.status===400||e.body?.code===10003;
+    const delay=Number(e.body?.retry_after);
+    await finish(permanent?"failed":"retry",{error:String(e.message).slice(0,250),lastErrorAt:now(),...(e.status===429&&delay>0?{next:now()+Math.max(60000,Math.ceil(delay*1000))}:{})});
+  }
 }
 export async function tickCommunity(db){
   const jobs=await db.collection("communityjobs").where("state","in",["waiting","retry","pending","sending"]).get();

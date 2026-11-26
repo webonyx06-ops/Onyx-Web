@@ -95,7 +95,7 @@ async function validTeams() {
   snap.docs.forEach((d) => { T[d.id] = d.data(); });
   return new Set([...TEAM_KEYS.filter((k) => !(T[k] && T[k].hidden)), ...Object.keys(T).filter((k) => T[k].custom && !T[k].hidden)]);
 }
-const roleName = (r) => r === "ultra" ? "ultra staff" : r === "captain" ? "capitán" : "staff";
+const roleName = (r) => r === "ultra" ? "ultra staff" : r === "captain" ? "capitán" : r === "admin" ? "administrador" : "staff";
 
 async function activeUltras() {
   const q = await admin.firestore().collection("staff").where("role", "==", "ultra").get();
@@ -207,7 +207,7 @@ export default async (req) => {
 
     if (body.action === "create") {
       const u = String(body.u || "").trim().toLowerCase();
-      const role = ["ultra", "staff", "captain"].includes(body.role) ? body.role : "staff";
+      const role = ["ultra", "admin", "staff", "captain"].includes(body.role) ? body.role : "staff";
       if (!okUser(u)) return json(400, { error: "El usuario tiene que tener entre 3 y 24 letras, números, punto, guion o guion bajo." });
       if (await findByUser(u)) return json(409, { error: "Ese usuario ya existe." });
       const password = genPassword();
@@ -222,7 +222,7 @@ export default async (req) => {
       const created = [], skipped = [], okTeams = await validTeams();
       for (const x of users) {
         const u = String(x.u || "").trim().toLowerCase(), p = String(x.p || "");
-        const role = ["ultra", "staff", "captain"].includes(x.role) ? x.role : "staff";
+        const role = ["ultra", "admin", "staff", "captain"].includes(x.role) ? x.role : "staff";
         const team = x.team ? String(x.team).toLowerCase() : null;
         if (!okUser(u)) { skipped.push({ u, why: "usuario inválido" }); continue; }
         if (p.length < 6) { skipped.push({ u, why: "contraseña muy corta" }); continue; }

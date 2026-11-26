@@ -1,3 +1,4 @@
+import {notice} from "./notices.mjs";
 const validId = value => typeof value === "string" && /^[A-Za-z0-9_-]{1,100}$/.test(value);
 const integer = (value, min, max) => Number.isSafeInteger(value) && value >= min && value <= max;
 function fail(status, message) { throw Object.assign(new Error(message), {status}); }
@@ -29,7 +30,7 @@ export async function playerWallet(db, who, b, fv, now = Date.now()) {
     const [p, rs] = await Promise.all([db.doc("perf/"+pid).get(), db.collection("redeems").where("pid","==",pid).get()]);
     return statement(p.data(),rs.docs);
   }
-  if (!isStaff) fail(403,"Esta operación requiere una cuenta de staff.");
+  if (!who.ultra) fail(403,"Solo Ultra Admin puede modificar saldos.");
   const adjustment = b.action === "walletAdjust";
   if (adjustment && (!validId(b.pid) || !validId(b.requestId) || !integer(b.amount,-100000,100000) || !b.amount || typeof b.reason !== "string" || b.reason.trim().length < 3)) fail(400,"Indicá jugador, importe y motivo.");
   if (!adjustment && (!validId(b.mid) || !integer(b.amount,1,100000))) fail(400,"Elegí un partido y el premio por jugador.");
@@ -58,6 +59,7 @@ export async function playerWallet(db, who, b, fv, now = Date.now()) {
     }
     const paths = ids.map(id=>"perf/"+id);
     const entry = {id:operation,v:b.amount,why:reason,at:now,by:who.u||"Staff"};
+    for(const pid of ids)notice(tx,db,pid,operation,"Billetera",reason+" · "+b.amount+" OC","canjes",now);
     for(const path of paths) tx.set(db.doc(path),{pts:fv.arrayUnion(entry)},{merge:true});
     tx.set(ref,{by:who.uid,at:now,amount:b.amount,count:ids.length,pid:adjustment?b.pid:null,mid:adjustment?null:b.mid});
     tx.set(db.collection("audit").doc(),{at:now,uid:who.uid,u:who.u,role:who.role,txt:reason+" · "+b.amount+" OC × "+ids.length+" · "+ids.join(", ")});

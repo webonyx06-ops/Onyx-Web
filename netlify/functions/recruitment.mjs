@@ -116,11 +116,22 @@ export default async function(req) {
       if(pid){await patchSnapshot(db,["players/"+pid]);await Promise.all([work(db,"roles_"+pid),work(db,"free_"+pid),deliver(db,"invite",body.id)]);}
       return json(200,{ok:true});
     }
-    if(body.action==="operations"){
+    if(["checkChannels","testChannel"].includes(body.action)){
+ if(!me.ultra)return json(403,{error:"Solo Ultra Admin."});const channels=["1575215567391039498","1575217513476657162"];
+ if(body.action==="testChannel"&&!channels.includes(body.channel))return json(400,{error:"Canal inválido."});
+ const bot=await api("GET","/users/@me"),names=[];for(const id of body.action==="testChannel"?[body.channel]:channels){const ch=await api("GET","/channels/"+id);if(ch.guild_id!=="1550607388267122788")return json(409,{error:"Servidor incorrecto."});names.push(ch.name);}
+ if(body.action==="testChannel"){await api("POST","/channels/"+body.channel+"/messages",{embeds:[{title:"PRUEBA DE CANAL · ONYX LEAGUES",description:"Verificación de envío desde Ultra Admin.",color:0xc29955}],allowed_mentions:{parse:[]}});return json(200,{status:"Mensaje de prueba enviado."});}
+ return json(200,{status:bot.username+" · Canales accesibles: "+names.join(", ")});
+ }
+ if(body.action==="operations"){
       if(!me.ultra)return json(403,{error:"Solo ultra admin."});
       const [jobs,history,invites,events,dispatch]=await Promise.all([db.collection("communityjobs").get(),db.collection("paymenthistory").get(),db.collection("recruitjobs").where("kind","==","invite").get(),db.collection("invitehistory").get(),db.collection("recruitjobs").get()]);
       return json(200,{deliveryErrors:dispatch.docs.map(d=>d.data()).filter(j=>j.lastError).map(j=>({id:j.id,kind:j.kind,error:j.lastError,at:j.errorAt,state:j.state})),events:events.docs.map(d=>d.data()),jobs:jobs.docs.map(d=>({...d.data(),id:d.id,token:undefined})),history:history.docs.map(d=>d.data()),invites:invites.docs.map(d=>{const {id,state,expires,createdAt,joinedAt}=d.data();return {id,state,expires,createdAt,joinedAt};})});
     }
+    if(body.action==="cancelJob"){
+      if(!me.ultra||!/^\w[\w-]{1,139}$/.test(body.key||""))return json(403,{error:"Solo ultra admin."});
+      const ref=db.doc("communityjobs/"+body.key);const cancelled=await db.runTransaction(async tx=>{const j=(await tx.get(ref)).data();if(!j||!["pending","waiting","retry","failed"].includes(j.state)||j.message||j.deliveryUncertain!==false&&j.kind!=="roles")return false;
+        tx.update(ref,{state:"cancelled",next:0,updatedAt:Date.now()});tx.set(db.collection("audit").doc(),{uid:me.uid,u:me.u,role:me.role,at:Date.now(),txt:"Canceló el evento "+body.key});return true;});return json(cancelled?200:409,cancelled?{ok:true}:{error:"El evento cambió o su entrega requiere verificación."});}
     if(body.action==="retryJob"){
       if(!me.ultra || !/^[\w-]{2,140}$/.test(body.key||""))return json(403,{error:"Solo ultra admin."});
       const ref=db.doc("communityjobs/"+body.key);

@@ -1,3 +1,5 @@
+import {premiumReminders} from "../lib/notices.mjs";
+import {seedStore} from "../lib/store-init.mjs";
 import {syncPremium} from "../lib/premium-sync.mjs";
 // ONYX Bot · revisión automática cada 10 minutos (Netlify la corre sola en el sitio publicado).
 // Manda recordatorios antes de cada partido, resultados, mapas sorteados y fichajes, y paga los sueldos de los coaches los lunes.
@@ -15,18 +17,21 @@ import { afterPatch } from "../lib/pickem.mjs";
 
 export default async () => {
   let db, admin;
-  try { admin = initAdmin(); db = admin.firestore(); } catch (e) { return new Response(String(e.message || e), { status: 200 }); }
+  try { admin = initAdmin(); db = admin.firestore(); } catch (e) { return new Response(String(e.message || e), { status: 503 }); }
   // Resumen público al día antes de revisar: lo que quedó en la cola y, una vez por hora, un control de partidos y equipos
   const pub = {};
+  try{await premiumReminders(db);}catch(e){console.error("Avisos Premium:",e.message);pub.premiumError=e.message;}
+  try{await seedStore(db);}catch(e){console.error("Catálogo:",e.message);}
   try { const q = await flushQueue(db); pub.cola = q.n || 0; await afterPatch(db, q); } catch (e) { console.error("resumen:", e); pub.error = String(e.message || e); }
   if (new Date().getUTCMinutes() < 10) { try { const h = await healSnapshot(db); pub.control = h.healed || 0; await afterPatch(db, h); } catch (e) { console.error("control del resumen:", e); } }
   clearSnapshotCache();
   // Votaciones de capitán vencidas
   try { const L = await loadSnapshot(); if (L) { const paths = await closeExpired(db, L); if (paths.length) { await patchSnapshot(db, paths); clearSnapshotCache(); pub.votaciones = paths.length; } } } catch (e) { console.error("votaciones:", e); }
   let r = { skipped: "ONYX Bot sin configurar" }, status = 200;
+  try {await tickCommunity(db);}catch(e){console.error("Mercado y roles:",e.message);}
   if (configured()) {
     try {await syncPremium(db);}catch(e){console.error("Premium:",e.message);}
-    try {await tickCommunity(db);}catch(e){console.error("Mercado y roles:",e.message);}
+    
     try {await upgradeRecruitment(db);}catch(e){console.error("Migración de inscripciones:",e.message);}
     try { await retryDeliveries(db); } catch(e){console.error("Reclutamiento:",e.message);}
     try { r = await runTick(db); } catch (e) { console.error("ONYX Bot:", e); r = { error: String(e.message || e) }; status = 500; }

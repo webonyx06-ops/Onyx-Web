@@ -1,3 +1,4 @@
+import {notice} from "../lib/notices.mjs";
 import {initAdmin,admin} from "../lib/admin.mjs";
 import {json,readBody,whoIs} from "../lib/auth.mjs";
 import {teamKeysFrom} from "../lib/league.mjs";
@@ -18,6 +19,27 @@ export async function market(db,me,b){
       tx.set(db.collection("audit").doc(),{uid:me.uid,u:me.u,role:me.role,at:Date.now(),txt:"Reinició la ventana de fichajes N° "+(current+1)});
       tx.set(db.doc("pubqueue/main"),{paths:admin.firestore.FieldValue.arrayUnion(ref.path),at:Date.now()},{merge:true});
       return {paths:[ref.path],jobs:[]};
+    });
+  }
+  if(b.action==="swap"){
+    if(!me.ultra&&me.role!=="admin")fail(403,"Solo administración.");
+    if(![b.key,b.pid,b.other].every(keyOk)||b.pid===b.other)fail(400,"Elegí dos jugadores.");
+    const op=digest(me.uid+"/swap/"+b.key),ids=[b.pid,b.other];
+    return db.runTransaction(async tx=>{
+      const refs=ids.map(id=>db.doc("players/"+id)),trans=ids.map((_,n)=>db.doc("transfers/"+op+n));
+      const [a,bp,existing]=await tx.getAll(...refs,trans[0]);if(existing.exists)return {jobs:[],paths:[]};
+      const players=[a.data(),bp.data()];if(players.some((p,n)=>!p?.team||p.team!==b.teams?.[n]||(p.marketVersion||0)!==b.versions?.[n])||players[0].team===players[1].team)fail(409,"Las plantillas cambiaron.");
+      const teams=await tx.getAll(...players.map(p=>db.doc("teams/"+p.team)));if(teams.some(t=>!t.exists))fail(409,"Equipo inexistente.");
+      const cfg=(await tx.get(db.doc("league/config"))).data()||{},links=await Promise.all(ids.map(id=>tx.get(db.collection("recruits").where("pid","==",id))));
+      const paths=[],jobs=[],at=Date.now();for(let n=0;n<2;n++){const p=players[n],other=players[1-n],team=teams[n].data(),rid=links[n].docs[0]?.id||p.recruitId||null;
+        const data={pid:ids[n],name:p.name||ids[n],from:p.team,to:other.team,fromName:team.name||p.team,toName:teams[1-n].data().name||other.team,at,version:(p.marketVersion||0)+1,win:cfg.windowId||1,amt:0,swap:op};
+        notice(tx,db,ids[n],op,"Mercado","Intercambio confirmado · "+data.toName,"mercado",at);tx.update(refs[n],{team:other.team,marketVersion:data.version});tx.set(trans[n],data);paths.push(refs[n].path,trans[n].path);
+        if(team.captain===ids[n]||team.sub===ids[n]){tx.set(teams[n].ref,{...(team.captain===ids[n]?{captain:null}:{}),...(team.sub===ids[n]?{sub:null}:{})},{merge:true});paths.push(teams[n].ref.path);}
+        if(!n){const id="swap_"+op;queue(tx,db,id,"transfer",{...data,rid,otherName:other.name||ids[1]});jobs.push(id);}
+        if(rid){const id="roles_"+op+n;queue(tx,db,id,"roles",{...data,rid});jobs.push(id);}
+      }
+      tx.set(db.collection("audit").doc(),{uid:me.uid,u:me.u,at,role:me.role,txt:"Intercambio oficial "+ids.join(" / ")});
+      tx.set(db.doc("pubqueue/main"),{at,paths:admin.firestore.FieldValue.arrayUnion(...paths)},{merge:true});return {jobs,paths};
     });
   }
   const submit=b.action==="submit",manual=b.action==="manual",cancel=b.action==="cancel";
@@ -48,7 +70,7 @@ export async function market(db,me,b){
     }
     if(status && status!=="ok"){
       if(status==="review" && offer.status!=="pend" || status==="accepted" && !["pend","review"].includes(offer.status))fail(409,"Transición inválida.");
-      updateOffer(status);return {paths:[],jobs:[]};
+      if(status==="no")notice(tx,db,pid,op+"rejected","Mercado","Solicitud de fichaje rechazada","mercado",at);updateOffer(status);return {paths:[],jobs:[]};
     }
     if(from===to || (!submit && (manual?b.from!==from || b.version!==version:offer.from!==undefined && offer.from!==from || offer.version!==undefined && offer.version!==version)))fail(409,"El plantel cambió. Revisá el jugador y la oferta.");
     const amt=manual||submit?b.amt:offer.amt;
@@ -70,17 +92,17 @@ export async function market(db,me,b){
     if(submit){
       if(items.some(o=>o.pid===pid && active.includes(o.status)))fail(409,"Ya hay una oferta abierta.");
       if(amt<Math.max(100,Math.round((player.value||100)*0.5/50)*50)||amt>3000)fail(400,"Monto fuera del rango de oferta.");
-      tx.set(offerRef,{team:to,items:[...items,{id:b.key,pid,team:to,from,version,amt,len:String(b.len||"").slice(0,80),msg:String(b.msg||"").slice(0,140),at,status:"pend"}]});return {paths:[],jobs:[]};
+      notice(tx,db,pid,op+"requested","Mercado","Recibiste una solicitud de fichaje de "+(teams[to]?.name||to),"mercado",at);tx.set(offerRef,{team:to,items:[...items,{id:b.key,pid,team:to,from,version,amt,len:String(b.len||"").slice(0,80),msg:String(b.msg||"").slice(0,140),at,status:"pend"}]});return {paths:[],jobs:[]};
     }
     const data={pid,name:player.name,from,to,amt,win,at,version:version+1,status:"confirmed",fromName:teams[from]?.name||from,toName:teams[to]?.name||to};
     const paths=[playerRef.path,trans.path];
     tx.update(playerRef,{team:to,marketVersion:version+1,...(rid?{recruitId:rid}:{})});
     if(to && amt){tx.set(db.doc("teams/"+to),{coins:funds-amt},{merge:true});paths.push("teams/"+to);}
     if(from && (amt || teams[from]?.captain===pid || teams[from]?.sub===pid)){const old=teams[from]||{};tx.set(db.doc("teams/"+from),{...(amt?{coins:(old.coins??6000)+amt}:{}),...(old.captain===pid?{captain:null}:{}),...(old.sub===pid?{sub:null}:{})},{merge:true});paths.push("teams/"+from);}
-    tx.set(trans,data);if(offer)updateOffer("ok");else audit("Pase confirmado de "+player.name);
+    notice(tx,db,pid,op,"Mercado",to?"Pase confirmado a "+(data.toName||to):"Volviste al mercado libre","mercado",at);tx.set(trans,data);if(offer)updateOffer("ok");else audit("Pase confirmado de "+player.name);
     const jobs=[];
     function add(kind){const id=kind+"_"+op;queue(tx,db,id,kind,{...data,rid:rid||null});jobs.push(id);}
-    add("transfer");if(ridData?.paid){add("roles");if(!to)add("free");}
+    add("transfer");if(ridData?.paid)add("roles");if(!to&&(!rid||ridData?.paid))add("free");
     tx.set(db.doc("pubqueue/main"),{paths:admin.firestore.FieldValue.arrayUnion(...paths),at},{merge:true});
     return {paths,jobs};
   });
@@ -89,7 +111,7 @@ export default async function(req){
   if(req.method!=="POST")return json(405,{error:"Método inválido."});
   try{const a=initAdmin(),db=a.firestore(),me=await whoIs(req,a);
     const result=await market(db,me,await readBody(req,4096));
-    if(result.paths.length)await patchSnapshot(db,result.paths);
+    if(result.paths.length)await patchSnapshot(db,result.paths).catch(e=>console.error("Publicación pendiente",e.message));
     for(const key of result.jobs)await work(db,key);
     return json(200,{ok:true});
   }catch(e){return json(e.status||503,{error:e.status?e.message:"Reintentá la operación."});}

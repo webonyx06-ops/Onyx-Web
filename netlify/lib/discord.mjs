@@ -51,7 +51,7 @@ export async function api(method, path, body, reason) {
   if (reason) headers["X-Audit-Log-Reason"] = encodeURIComponent(String(reason).slice(0, 400));
   for (let attempt = 0; attempt < 2; attempt++) {
     const r = await fetch(API + path, { method, headers, body: multipart ? body : body !== undefined ? JSON.stringify(body) : undefined });
-    if (r.status === 429 && attempt === 0) { const j = await r.json().catch(() => ({})); await new Promise((ok) => setTimeout(ok, Math.min(3000, (j.retry_after || 1) * 1000))); continue; }
+    if (r.status === 429 && attempt === 0) { const j = await r.json().catch(() => ({})); if(Number(j.retry_after)>3)throw new DiscordError(429,j); await new Promise((ok) => setTimeout(ok, (Number(j.retry_after) || 1) * 1000)); continue; }
     if (r.status === 204) return null;
     const j = await r.json().catch(() => null);
     if (!r.ok) throw new DiscordError(r.status, j);

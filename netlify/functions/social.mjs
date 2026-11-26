@@ -1,3 +1,7 @@
+import {createHash} from "node:crypto";
+import {commerce} from "../lib/store-commerce.mjs";
+import {notice} from "../lib/notices.mjs";
+import {musicSearch,storeTracks} from "../lib/music-search.mjs";
 import {playerWallet} from "../lib/player-wallet.mjs";
 import {initAdmin} from "../lib/admin.mjs";
 import {json,whoIs,readBody} from "../lib/auth.mjs";
@@ -25,10 +29,10 @@ export default async function handler(req){
  try{
  const admin=initAdmin(),db=admin.firestore(),cfg=db.doc("socialconfig/catalog"),now=Date.now();
  const url=new URL(req.url);
- if(req.method==="GET"){
+ if(req.method==="GET"){if(url.searchParams.has("music"))return json(200,{tracks:await (url.searchParams.get("provider")==="apple"?storeTracks:musicSearch)({q:url.searchParams.get("music")})},{"cache-control":"public,max-age=300"});
  const asset=url.searchParams.get("art");if(asset){if(!key(asset))reject("Imagen inválida.");const img=(await db.doc("socialart/"+asset).get()).data()?.image;if(!img)reject("Imagen inexistente.",404);const [mime,data]=img.split(",");return new Response(Buffer.from(data,"base64"),{headers:{"content-type":mime.slice(5,-7),"cache-control":"public,max-age=86400","x-content-type-options":"nosniff"}});}
  const c=(await cfg.get()).data()||{},pid=url.searchParams.get("pid");
- if(!pid)return json(200,{config:c},{"cache-control":"public,max-age=0,s-maxage=30,stale-while-revalidate=30"});
+ if(!pid){const overrides=Object.fromEntries(Object.entries(c.items||{}).map(([id,v])=>[id,available(v,now)?v:{active:false}]).filter(([id,v])=>v.active!==false||catalog().some(x=>x.id===id)));return json(200,{config:{...c,items:overrides}},{"cache-control":"public,max-age=0,s-maxage=30,stale-while-revalidate=30"});}
  if(!key(pid))reject("Jugador inválido.");
  const [w,v]=await Promise.all([db.doc("socialprofiles/"+pid).get(),db.doc("valstats/"+pid).get()]);const ranked=v.data()||{};
  return json(200,{profile:visible(w.data()||{},catalog(c),now),ranked:{ign:ranked.ign||null,series:ranked.series||[],trend:ranked.trend||[]}});
@@ -37,6 +41,26 @@ export default async function handler(req){
  const who=await whoIs(req,admin);if(!who)reject("Entrá con tu cuenta.",401);
  const b=await readBody(req,250000),action=b.action;
  if(["wallet","walletAdjust","walletMatch"].includes(action)){const result=await playerWallet(db,who,b,admin.firestore.FieldValue,now);if(result.paths)await patchSnapshot(db,result.paths).catch(()=>{});return json(200,result);}
+ if(action==="metrics"){if(!who.ultra)reject("Solo Ultra Admin.",403);const [stats,conf]=await Promise.all([db.collection("storemetrics").get(),cfg.get()]),popular=conf.data()?.popular||{},rows=new Map(stats.docs.map(d=>[d.id,d.data()]));for(const [id,orders] of Object.entries(popular))rows.set(id,{...rows.get(id),orders});return json(200,{rows:Array.from(rows,([id,v])=>({id,...v}))});}
+ if(action==="measure"){
+ if(!who.pid||!key(b.id)||!["view","trial"].includes(b.kind))reject("Medición inválida.");const item=catalog((await cfg.get()).data()||{}).find(x=>x.id===b.id);if(!item||!available(item,now))reject("Producto no publicado.");
+ const day=new Date(now).toISOString().slice(0,10),hash=createHash("sha256").update(day+"/"+who.pid).digest("hex"),seen=db.doc("storemetricdays/"+hash),keyName=b.kind+"_"+b.id;
+ await db.runTransaction(async tx=>{if((await tx.get(seen)).data()?.[keyName])return;tx.set(seen,{[keyName]:true,expiresAt:new Date(now+2*86400000)},{merge:true});tx.set(db.doc("storemetrics/"+b.id),{[b.kind]:admin.firestore.FieldValue.increment(1)},{merge:true});});return json(200,{ok:true});}
+ if(action==="inspect"){if(!who.staff)reject("Solo staff.",403);return json(200,{config:(await cfg.get()).data()||{}});}
+ if(action==="setFeatured"){if(!who.ultra)reject("Solo Ultra Admin.",403);if(!Array.isArray(b.ids)||b.ids.length>30)reject("Máximo 30 destacados.");await db.runTransaction(async tx=>{const items=catalog((await tx.get(cfg)).data()||{});if(b.ids.some(id=>!items.some(i=>i.id===id&&available(i,now))))reject("Elegí artículos publicados.");tx.set(cfg,{picks:[...new Set(b.ids)]},{merge:true});});return json(200,{ok:true});}
+ if(["externalPrize","externalList","externalDelivery"].includes(action))return json(200,await commerce(db,who,b,now,admin.firestore.FieldValue));
+ if(action==="orders"){if(!who.ultra)reject("Solo Ultra Admin.",403);const rows=await db.collection("socialreceipts").orderBy("at","desc").limit(100).get();return json(200,{rows:rows.docs.map(d=>({id:d.id,...d.data()}))});}
+ if(action==="refund"){if(!who.ultra)reject("Solo Ultra Admin.",403);if(!/^[a-zA-Z0-9_-]{1,150}$/.test(b.order)||!short(b.reason,120))reject("Indicá un motivo.");let path;await db.runTransaction(async tx=>{
+ const ref=db.doc("socialreceipts/"+b.order),row=(await tx.get(ref)).data();if(!row?.redeemId||!Array.isArray(row.added)||!row.added.length)reject("Canje sin detalle reembolsable.");if(row.refunded)return;
+ const wallet=db.doc("socialprofiles/"+row.pid),redeem=db.doc("redeems/"+row.redeemId),[w,r]=await tx.getAll(wallet,redeem);if(r.data()?.status!=="ok"||r.data().arch)reject("Canje no vigente.");tx.set(wallet,{owned:(w.data()?.owned||[]).filter(id=>!row.added.includes(id))},{merge:true});tx.update(redeem,{status:"no"});tx.update(ref,{refunded:true});tx.set(db.collection("audit").doc(),{uid:who.uid,u:who.u,role:who.role,at:now,txt:"Reembolso "+b.order+" · "+short(b.reason,120)});path=redeem.path;tx.set(db.doc("pubqueue/main"),{at:now,paths:admin.firestore.FieldValue.arrayUnion(path)},{merge:true});notice(tx,db,row.pid,b.order+"refund","Tienda","Reembolso de "+row.cost+" OC","premios",now);});if(path)await patchSnapshot(db,[path]).catch(()=>{});return json(200,{ok:true});}
+ if(["inbox","readNotices","readOne","noticePrefs"].includes(action)){
+ if(!key(who.pid))reject("Vinculá tu jugador.",403);const pref=db.doc("noticeprefs/"+who.pid);
+ if(action==="noticePrefs"){if(!Array.isArray(b.muted)||b.muted.some(x=>!["Tienda","Mercado","Premios","Billetera","Premium"].includes(x)))reject("Preferencia desconocida.");await pref.set({muted:[...new Set(b.muted)]},{merge:true});return json(200,{ok:true});}
+ if(action==="readOne"){if(!/^[a-f0-9]{32}$/.test(b.id))reject("Aviso inválido.");const ref=db.doc("playernotices/"+b.id);await db.runTransaction(async tx=>{if((await tx.get(ref)).data()?.pid!==who.pid)reject("Sin acceso.",403);tx.update(ref,{read:true});});return json(200,{ok:true});}
+ if(action==="readNotices"){await pref.set({readAt:now},{merge:true});return json(200,{ok:true});}
+ const [rs,p]=await Promise.all([db.collection("playernotices").where("pid","==",who.pid).get(),pref.get()]),prefs=p.data()||{};
+ const rows=rs.docs.map(x=>({...x.data(),id:x.id})).filter(x=>!prefs.muted?.includes(x.kind)).sort((a,b)=>b.at-a.at);
+ return json(200,{rows:rows.slice(0,100),readAt:prefs.readAt||0,muted:prefs.muted||[],unread:rows.filter(x=>!x.read&&x.at>(prefs.readAt||0)).length});}
  if(action==="settings"||action==="pack"||action==="item"){
  if(!who.ultra)reject("Solo Ultra Admin.",403);
  if(action==="pack"){const ids=[...new Set(String(b.ids||"").split(/[ ,\n]+/).filter(Boolean))];if(!key(b.id)||!short(b.name,60)||!ids.length||ids.length>80||!bounded(b.discount,0,90))reject("Revisá el paquete.");await db.runTransaction(async tx=>{const current=(await tx.get(cfg)).data()||{},all=catalog(current);if(ids.some(id=>!all.some(i=>i.id===id)))reject("El paquete tiene IDs inexistentes.");tx.set(cfg,{packs:{[b.id]:{name:short(b.name,60),ids,discount:b.discount,active:!!b.active}}},{merge:true});});return json(200,{ok:true});}
@@ -66,7 +90,7 @@ export default async function handler(req){
      if(balance(perf.data()||{},{docs:rs.docs.filter(doc=>doc.id!==b.id)})<r.pts)reject("Saldo insuficiente.",409);
      if(p.stock!=null&&p.stock!==""){if(!Number.isInteger(+p.stock)||+p.stock<1)reject("Premio agotado.",409);tx.update(prize,{stock:+p.stock-1});paths.push(prize.path);}
    }
-   tx.update(ref,{status,reviewedBy:who.u,reviewedAt:now,staffNote:short(b.note,140),delivered:false});
+   notice(tx,db,r.pid,b.id+status,"Premios",(b.ok?"Canje aprobado · ":"Canje rechazado · ")+r.prize,"canjes",now);tx.update(ref,{status,reviewedBy:who.u,reviewedAt:now,staffNote:short(b.note,140),delivered:false});
    tx.set(db.collection("audit").doc(),{at:now,uid:who.uid,u:who.u,role:who.role,txt:(b.ok?"Aprobó":"Rechazó")+" el canje "+b.id+" · "+r.prize});
    tx.set(db.doc("pubqueue/main"),{paths:admin.firestore.FieldValue.arrayUnion(...paths),at:now},{merge:true});return paths;
  });
@@ -89,6 +113,7 @@ export default async function handler(req){
  if(managing&&!who.ultra)reject("Solo Ultra Admin.",403);
  const pid=managing?b.pid:who.pid;if(!key(pid))reject("Vinculá primero tu cuenta con un jugador.",403);
  const ref=db.doc("socialprofiles/"+pid),receipt=key(b.requestId)?db.doc("socialreceipts/"+pid+"_"+b.requestId):null;
+ const song=action==="song"&&b.trackId?(await (String(b.trackId).startsWith("apple-")?storeTracks:musicSearch)({id:b.trackId}))[0]:null;
  let redeemPath=null;const result=await db.runTransaction(async tx=>{
  const [ws,cs,ps,rs,pl]=await Promise.all([tx.get(ref),tx.get(cfg),tx.get(db.doc("perf/"+pid)),tx.get(db.collection("redeems").where("pid","==",pid)),tx.get(db.doc("players/"+pid))]);if(!managing){const member=await tx.get(db.doc("members/"+who.uid));if(member.data()?.pid!==pid||member.data()?.banned)reject("La vinculación cambió.",403);}if(!pl.exists)reject("Jugador inexistente.",404);
  const w={owned:[],wish:[],gear:{},...ws.data()},c=cs.data()||{},settings={...defaults,...c.settings},items=catalog(c),i=items.find(x=>x.id===b.id),saldo=balance(ps.data()||{},rs),purchases=db.collection("socialreceipts").where("pid","==",pid);
@@ -101,16 +126,24 @@ export default async function handler(req){
  tx.set(db.collection("audit").doc(),{at:now,uid:who.uid,u:who.u,role:"ultra",txt:action+" · "+pid+" · "+(i?.name||b.days||"")});
  }else if(action==="wish"){if(!i)reject("Artículo desconocido.");w.wish=b.on?[...new Set([...w.wish,i.id])]:w.wish.filter(id=>id!==i.id);}
  else if(action==="extra"){if(w.until<=now||!w.until||!i||i.category!=="badge"||!entitled(i,w,now))reject("Requiere Premium e insignia disponible.",403);const old=w.extraBadges||[];w.extraBadges=old.includes(i.id)?old.filter(k=>k!==i.id):[...old.filter(k=>k!==i.id),i.id].slice(-3);}
- else if(action==="equip"){if(!i||!entitled(i,w,now))reject("Artículo sin desbloquear.",403);w.gear[i.category]=i.id;}
+ else if(action==="song"){if(!w.music&&!(w.until>now))reject("Se requiere el desbloqueo musical o Premium.",403);if(b.trackId&&!song)reject("La grabación ya no está disponible.");w.song=song;}
+ else if(action==="equipSet"||action==="draft"){
+ const gear={},ids=b.ids;if(!Array.isArray(ids)||ids.length>Object.keys(categories).length)reject("Combinación inválida.");
+ for(const id of ids){const x=items.find(p=>p.id===id);if(!x||gear[x.category]||action==="equipSet"&&!entitled(x,w,now))reject("Objeto sin desbloquear.",403);gear[x.category]=id;}
+ if(action==="draft"){if(!bounded(b.slot,0,w.until>now?9:2))reject("Configuración inválida.");w.drafts={...w.drafts,[b.slot]:gear};}else w.gear=gear;
+ }else if(action==="equip"){if(!i||!entitled(i,w,now))reject("Artículo sin desbloquear.",403);w.gear[i.category]=i.id;}
  else if(action==="edit"){
  w.agents2=short(b.agents2,100);w.intensity=bounded(b.intensity,0,100)?b.intensity:50;w.bio=cleanText(b.bio,280);if(b.photo!==undefined)w.photo=cleanPicture(b.photo);
  if(w.until>now&&b.animated!==undefined){if(b.animated&&(!/^data:image\/gif;base64,R0lGOD[lh]/.test(b.animated)||b.animated.length>110000))reject("Usá un GIF de hasta 80 KB.");w.animated=b.animated;}
  if(w.until>now||w.studio){w.label=cleanText(b.label,28);w.color=/^#[a-f0-9]{6}$/i.test(b.color||"")?b.color:"";w.title=cleanText(b.title,45);if(b.banner!==undefined)w.banner=cleanPicture(b.banner);}
- if(w.music||w.until>now){if(b.audio&&!/^https:\/\/upload\.wikimedia\.org\/wikipedia\/commons\/[a-f0-9]\/[a-f0-9]{2}\/[^\s?#]+\.(ogg|mp3|wav)$/i.test(b.audio))reject("Usá un audio de Wikimedia Commons.");w.song=b.audio?{audio:short(b.audio,450),name:short(b.song,70),artist:short(b.artist,70),cover:/^https:\/\/upload\.wikimedia\.org\/[^\s?#]+\.(jpg|png|webp)$/i.test(b.cover||"")?short(b.cover,450):""}:null;}
+ if(b.audio!==undefined&&(w.music||w.until>now)){if(b.audio&&!/^https:\/\/upload\.wikimedia\.org\/wikipedia\/commons\/[a-f0-9]\/[a-f0-9]{2}\/[^\s?#]+\.(ogg|mp3|wav)$/i.test(b.audio))reject("Usá un audio de Wikimedia Commons.");w.song=b.audio?{audio:short(b.audio,450),name:short(b.song,70),artist:short(b.artist,70),cover:/^https:\/\/upload\.wikimedia\.org\/[^\s?#]+\.(jpg|png|webp)$/i.test(b.cover||"")?short(b.cover,450):""}:null;}
  }else if(action==="buy"){
  if(!receipt)reject("Falta identificar la compra.");if((await tx.get(receipt)).exists)return {ok:true};
  let cost=0,label="";
- if(b.product==="item"){if(!i||i.premiumOnly||!available(i,now))reject("Artículo fuera de venta.");if(w.owned.includes(i.id))return {ok:true};cost=salePrice(i,now);label=i.name;w.owned.push(i.id);}
+ if(b.product==="outfit"){
+ if(!Array.isArray(b.ids)||!b.ids.length||b.ids.length>Object.keys(categories).length)reject("Selección inválida.");const used=new Set();
+ for(const id of b.ids){const x=items.find(p=>p.id===id);if(!x||used.has(x.category))reject("Combinación inválida.");used.add(x.category);if(entitled(x,w,now))continue;if(!available(x,now)||x.premiumOnly)reject("Fuera de venta.");cost+=salePrice(x,now);w.owned.push(id);}label="Combinación de ONYX Studio";
+ }else if(b.product==="item"){if(!i||i.premiumOnly||!available(i,now))reject("Artículo fuera de venta.");if(w.owned.includes(i.id))return {ok:true};cost=salePrice(i,now);label=i.name;w.owned.push(i.id);}
  else if(b.product==="pack"){const pack=c.packs?.[b.id];if(!pack?.active)reject("Paquete inactivo.");const q=bundlePrice(items.filter(x=>pack.ids.includes(x.id)),w,pack.discount,now);if(!q.ids.length)reject("Ya tenés los artículos disponibles.");w.owned.push(...q.ids);cost=q.cost;label=pack.name;}
  else if(b.product==="bundle"){const q=bundlePrice(items.filter(x=>x.collection===b.collection),w,settings.discount,now);if(!q.ids.length)reject("Ya tenés la colección disponible.");w.owned.push(...q.ids);cost=q.cost;label=b.collection;}
  else if(["days30","days90","days365"].includes(b.product)){cost=settings[b.product];const days=Number(b.product.slice(4));w.until=Math.max(now,w.until||0)+days*86400000;label="ONYX Premium · "+days+" días";}
@@ -119,8 +152,9 @@ export default async function handler(req){
  else if(b.product==="discord"){if(!who.discord)reject("Entrá con Discord para solicitar el rol.");cost=settings.discord;label="Rol personalizado y canal exclusivo";}
  else reject("Producto desconocido.");
  if(b.expectedCost!=null&&cost!==b.expectedCost)reject("El precio cambió. Actualizá la tienda y confirmá el nuevo importe.",409);if(cost>saldo)reject("Saldo individual insuficiente.",409);
- const row={pid,at:now,label,cost};tx.set(receipt,row);
- if(cost||b.product==="discord"){const redeem=db.collection("redeems").doc();redeemPath=redeem.path;tx.set(db.doc("pubqueue/main"),{at:now,paths:admin.firestore.FieldValue.arrayUnion(redeem.path)},{merge:true});tx.set(redeem,{pid,player:pl.data().name||"",team:pl.data().team||null,prize:label,prizeId:"social-"+b.product,pts:cost,method:"pts",status:"ok",delivered:b.product!=="discord",at:now});}
+ const row={pid,at:now,label,cost,added:w.owned.filter(id=>!(ws.data()?.owned||[]).includes(id))};for(const id of row.added)tx.set(cfg,{popular:{[id]:admin.firestore.FieldValue.increment(1)}},{merge:true});notice(tx,db,pid,receipt.id,["days30","days90","days365"].includes(b.product)?"Premium":"Tienda",label+" · "+cost+" OC","premios",now);
+ if(cost||b.product==="discord"){const redeem=db.collection("redeems").doc();redeemPath=redeem.path;row.redeemId=redeem.id;tx.set(db.doc("pubqueue/main"),{at:now,paths:admin.firestore.FieldValue.arrayUnion(redeem.path)},{merge:true});tx.set(redeem,{pid,player:pl.data().name||"",team:pl.data().team||null,prize:label,prizeId:"social-"+b.product,pts:cost,method:"pts",status:"ok",delivered:b.product!=="discord",at:now});}
+ tx.set(receipt,row);
  }else reject("Acción desconocida.");
  if(w.until!==ws.data()?.until){const linked=who.pid===pid?who.discord:null;if(linked)w.discord=linked;w.roleCheck=0;}
  tx.set(ref,w);return {ok:true};
