@@ -7,7 +7,7 @@ import { decideApplication, readAnswers, submitApplication, validId } from "../l
 import {handler as checkout} from "./inscripcion-pago.mjs";
 import {work} from "../lib/community-sync.mjs";
 import { identity } from "../lib/recruit-id.mjs";
-import { deliver,enqueue,receiptFile,saveReceipt,labels } from "../lib/recruit-delivery.mjs";
+import { deliver,enqueue,receiptFile,saveReceipt,labels,reissueInvite,recoverInvites } from "../lib/recruit-delivery.mjs";
 import { profile } from "../lib/survey-fields.mjs";
 
 const snowflake = id => /^\d{15,22}$/.test(id || "");
@@ -39,8 +39,8 @@ export default async function(req) {
       const legacy=own.exists?null:await db.collection("recruits").where("discordId","==",user.id).limit(1).get();
       const record=own.exists?own:legacy?.docs[0],r=record?.data();
       const job=r?(await db.doc("recruitjobs/invite_"+record.id).get()).data():null;
-      return json(200,{paymentOptions:r?.status==="approved" && !r.paid?{paypal:"https://paypal.me/zerinhoprogamer2005"}:null,user:{username:user.username},application:r?{id:record.id,status:r.status||"pending",riot:r.riot,receipt:r.receiptState,paymentState:r.paymentState,access:r.accessState,paid:!!r.paid}:null,
-        invite:r?.paid && r.status==="approved" && !r.joinedAt && job?.code && job.recipient===user.id && job.expires>Date.now()?"https://discord.gg/"+encodeURIComponent(job.code):null});
+      return json(200,{paymentOptions:r?.status==="approved" && !r.paid?{paypal:"https://paypal.me/zerinhoprogamer2005"}:null,user:{username:user.username},application:r?{id:record.id,status:r.status||"pending",riot:r.riot,receipt:r.receiptState,paymentState:r.paymentState,access:r.accessState,paid:!!r.paid,inviteState:r.inviteState||job?.state||null,inviteNote:labels[r.inviteState||job?.state]||null,canReinvite:r.status!=="rejected" && !r.joinedAt && r.inviteState!=="joined"}:null,
+        invite:r && r.status!=="rejected" && !r.joinedAt && job?.code && job.recipient===user.id && job.expires>Date.now()?"https://discord.gg/"+encodeURIComponent(job.code):null});
     }
     if (req.method === "GET") {
       const list = await db.collection("players").where("team","==",null).get();
@@ -61,14 +61,23 @@ export default async function(req) {
       const receiptState=state==="sent"?state:await deliver(db,"receipt",body.id);
       return json(200,{ok:true,receiptState});
     }
+    if(body?.action==="reinvite"){
+      if(!user)return json(403,{error:"Conectá tu cuenta de Discord."});
+      const own=await db.doc("recruits/"+user.id).get();
+      const rid=own.exists?user.id:(await db.collection("recruits").where("discordId","==",user.id).limit(1).get()).docs[0]?.id;
+      if(!rid)return json(404,{error:"No encontramos una postulación para esta cuenta."});
+      const out=await reissueInvite(db,rid,user);
+      return json(200,{ok:true,state:out.state,message:out.state==="joined"?"Ya estás en el servidor.":labels[out.state]||out.state,invite:out.link});
+    }
     if (body?.action === "apply") {
       const row = readAnswers({...body.answers,...(user?{discord:user.username}:{})});
       if(!user)return json(401,{error:"Conectá tu Discord para recibir la invitación."});
       if(body.receipt)return json(409,{error:"Esperá la aceptación de la solicitud."});
       const receipt=null;
       const ip = req.headers.get("x-nf-client-connection-ip") || "local";
-      if (!await signupLimit(db,"application:"+ip,Date.now())) return json(429,{error:"Alcanzaste el límite diario de solicitudes."});
+      if (!await signupLimit(db,"application:"+ip,Date.now(),30)) return json(429,{error:"Alcanzaste el límite diario de solicitudes."});
       const id=await submitApplication(db,row,user.id,{source:"web",receipt});
+      await deliver(db,"invite",id).catch(e=>console.error("invitación tras postular",id,e.message));
       const receiptState=receipt?await deliver(db,"receipt",id):null;
       return json(201,{status:"pending",id,receiptState});
     }
@@ -92,9 +101,16 @@ export default async function(req) {
       
       return json(200,{ok:true,pid});
     }
+    if(body.action==="recoverInvites"){
+      if(!me.ultra)return json(403,{error:"Solo ultra admin."});
+      const dryRun=body.confirm!==true;
+      const out=await recoverInvites(db,{dryRun,limit:Number(body.limit)||50,by:me.uid});
+      if(!dryRun)db.collection("audit").doc().set({uid:me.uid,u:me.u,role:me.role,at:Date.now(),txt:"Recuperó invitaciones de Discord ("+out.selected+")"}).catch(()=>{});
+      return json(200,out);
+    }
     if(body.action==="retryDelivery" && validId(body.id) && ["invite","receipt"].includes(body.kind)){
       const ref=db.doc("recruits/"+body.id),row=(await ref.get()).data();
-      if(!row || body.kind==="invite" && (row.status!=="approved" || !row.paid))return json(409,{error:"Primero aprobá al jugador."});
+      if(!row || body.kind==="invite" && row.status==="rejected")return json(409,{error:"Primero aprobá al jugador."});
       if(body.kind==="invite" && !(await db.doc("recruitjobs/invite_"+body.id).get()).exists){
         const recipient=row.discordId || (snowflake(body.id)?body.id:body.discordId);
         if(!snowflake(recipient))return json(400,{error:"Indicá el ID numérico de Discord del jugador."});

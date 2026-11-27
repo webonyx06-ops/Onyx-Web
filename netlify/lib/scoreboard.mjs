@@ -87,7 +87,20 @@ async function readWithClaude(mediaType, data, fetchImpl) {
 
 async function readWithGemini(mediaType, data, fetchImpl) {
   let last = null;
-  for (const model of GEMINI_MODELS()) {
+  const models = GEMINI_MODELS();
+  // Ask the provider which Flash models this key can actually use.
+  if (!process.env.GEMINI_MODEL && fetchImpl === fetch) {
+    try {
+      const listing = await fetchImpl("https://generativelanguage.googleapis.com/v1beta/models?pageSize=1000", {headers:{"x-goog-api-key":process.env.GEMINI_API_KEY},signal:AbortSignal.timeout(3500)});
+      if (listing.ok) {
+        const catalog = await listing.json();
+        const names=(catalog.models||[]).filter(m=>m.supportedGenerationMethods?.includes("generateContent"))
+          .map(m=>m.name.replace(/^models\//,"")).filter(n=>/^gemini-[\d.]+-flash(?:-lite)?$/.test(n)).sort((a,b)=>b.localeCompare(a,undefined,{numeric:true}));
+        models.unshift(...names);
+      }
+    } catch { /* fallback to configured model candidates */ }
+  }
+  for (const model of new Set(models)) {
     let r;
     try {
       // la clave va en un encabezado (no en la dirección) para que no quede en ningún registro

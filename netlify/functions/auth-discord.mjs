@@ -15,6 +15,8 @@ const readCookie = (req) => { const m = (req.headers.get("cookie") || "").match(
 const avatarOf = (u) => u.avatar ? `https://cdn.discordapp.com/avatars/${u.id}/${u.avatar}.${String(u.avatar).startsWith("a_") ? "gif" : "png"}?size=128`
   : `https://cdn.discordapp.com/embed/avatars/${Number((BigInt(u.id) >> 22n) % 6n)}.png`;
 
+// Constancia de cada intento de unión automática por OAuth2 (antes un fallo no dejaba rastro).
+const oauthJoinLog=(id,result)=>{try{initAdmin().firestore().collection("invitehistory").doc().set({id,recipient:id,event:"oauthJoin:"+result,at:Date.now()}).catch(()=>{});}catch{}};
 export default async (req) => {
   const url = new URL(req.url), C = cfg();
   const applying=url.searchParams.get("flow")==="postular" || readCookie(req).startsWith("apply_") && url.pathname.endsWith("/callback");
@@ -25,7 +27,7 @@ export default async (req) => {
   if (!url.pathname.endsWith("/callback")) {
     const state = (applying?"apply_":"")+randomBytes(18).toString("hex");
     const q = new URLSearchParams({ client_id: C.id, response_type: "code", redirect_uri: redirect, scope: "identify", state, prompt: "none" });
-    if(applying)q.delete("prompt");
+    if(applying){q.delete("prompt");q.set("scope","identify guilds.join");}
     return new Response(null, { status: 302, headers: { location: `https://discord.com/oauth2/authorize?${q}`, "set-cookie": cookie(state, 600), "cache-control": "no-store" } });
   }
 
@@ -43,6 +45,13 @@ export default async (req) => {
     const u = await ur.json().catch(() => ({}));
     if (!ur.ok || !/^\d{5,25}$/.test(String(u.id || ""))) return fail("user");
     if(applying){
+      const guild=process.env.DISCORD_GUILD_ID, bot=process.env.DISCORD_BOT_TOKEN;
+      if(guild==="1550607388267122788" && bot && tok.scope?.split(" ").includes("guilds.join")){
+        try{
+          const join=await fetch("https://discord.com/api/v10/guilds/"+guild+"/members/"+u.id,{method:"PUT",headers:{Authorization:"Bot "+bot,"Content-Type":"application/json"},body:JSON.stringify({access_token:tok.access_token}),signal:AbortSignal.timeout(5000)});
+          oauthJoinLog(u.id,join.ok?"ok":"http_"+join.status);if(!join.ok)console.warn("Discord onboarding HTTP",join.status);
+        }catch{oauthJoinLog(u.id,"unavailable");console.warn("Discord onboarding unavailable");}
+      }
       const headers=new Headers({...clear,location:site()+"/postular.html"});
       headers.append("set-cookie",identityCookie(u,C.secret));
       return new Response(null,{status:302,headers});

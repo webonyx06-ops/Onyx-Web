@@ -9,19 +9,21 @@ async function series(db,tx,source,who) {
   const games = round.docs.filter(d=>key.includes(d.data().a) && key.includes(d.data().b) && d.data().a!==d.data().b);
   const existing = games.find(d=>d.data().leg==="desempate");
   const pair = games.filter(d=>d.data().leg!=="desempate");
+  if (pair.length!==2 && pair.length>0) return {first,key,existing,winners:[]};
   if (pair.length!==2) fail(409,"El cruce debe tener ida y vuelta en la misma fecha.");
   const id = existing?.id || "tb_"+createHash("sha256").update(JSON.stringify(pair.map(d=>d.id).sort())).digest("hex").slice(0,24);
   const winners = pair.map(d=>d.data()).filter(m=>m.status==="played" && m.ra!=null && m.rb!=null && +m.ra!==+m.rb).map(m=>+m.ra>+m.rb?m.a:m.b);
   return {first,key,id,existing,winners};
 }
-export async function createTiebreak(db,source,who) {
+export async function createTiebreak(db,source,who,optional=false) {
   return db.runTransaction(async tx=>{
     const {first,key,id,existing,winners} = await series(db,tx,source,who);
     if (existing) return id;
+    if (optional && new Set(winners).size!==2) return null;
     if (new Set(winners).size!==2) fail(409,"El desempate se habilita cuando cada equipo ganó una partida.");
     const ref = db.doc("matches/"+id);
     if ((await tx.get(ref)).exists) fail(409,"El identificador del desempate ya está en uso.");
-    tx.set(ref,{fecha:first.fecha,a:key[0],b:key[1],leg:"desempate",status:"pending",ra:null,rb:null,date:"",map:null,stats:{},createdBy:who.uid});
+    tx.set(ref,{fecha:first.fecha,a:key[0],b:key[1],leg:"desempate",status:"pending",ra:null,rb:null,date:"",map:first.deciderMap||null,initialSide:first.deciderSide||null,stats:{},createdBy:who.uid});
     return id;
   });
 }

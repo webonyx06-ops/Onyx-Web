@@ -50,7 +50,7 @@ export async function deliver(db,kind,id,{call=api,now=Date.now,manual=false}={}
   const ref=jobRef(db,kind,id), recruit=db.doc("recruits/"+id), token=randomUUID(),field=stateField(kind);
   const job=await db.runTransaction(async tx=>{
     const [js,rs]=await tx.getAll(ref,recruit),j=js.data(),r=rs.data();
-    if(!j || !r || (kind==="invite" && (r.status!=="approved" || !r.paid)))return {stop:true,state:r?.[field]||"identity"};
+    if(!j || !r || (kind==="invite" && (r.status==="rejected")))return {stop:true,state:r?.[field]||"identity"};
     if((j.state==="sent" && !(kind==="invite" && j.expires<=now())) || (j.state==="sending" && j.next>now()) || (!manual && (["blocked","identity","expired","joined"].includes(j.state) || j.next>now())))return {stop:true,state:j.state};
     tx.update(ref,{state:"sending",token,next:now()+120000,attempt:(j.attempt||0)+1});
     return {...j,discord:r.discord,riot:r.riot,method:r.method};
@@ -102,7 +102,7 @@ export async function deliver(db,kind,id,{call=api,now=Date.now,manual=false}={}
       if(!await persist({code,expires,createdAt:now()}))return "sending";
     }
     const dm=await call("POST","/users/@me/channels",{recipient_id:job.recipient});
-    await call("POST","/channels/"+dm.id+"/messages",{content:"¡Tu postulación a ONYX League fue aprobada! Ya estás en el mercado como agente libre. Tu invitación personal de un solo uso vence <t:"+Math.floor(expires/1000)+":R>.\nhttps://discord.gg/"+code,nonce:hash(id+code).slice(0,24),enforce_nonce:true,allowed_mentions:{parse:[]}});
+    await call("POST","/channels/"+dm.id+"/messages",{content:"Recibimos tu postulación a ONYX Leagues. Podés entrar al servidor mientras el Staff revisa tu ficha. Tu invitación personal de un solo uso vence <t:"+Math.floor(expires/1000)+":R>.\nhttps://discord.gg/"+code,nonce:hash(id+code).slice(0,24),enforce_nonce:true,allowed_mentions:{parse:[]}});
     await persist({sentAt:now()},"sent");return "sent";
   }catch(e){
     const state=e.body?.code===50007?"blocked":e.status>=400 && e.status<500 && e.status!==429?"config":"retry";
@@ -126,4 +126,54 @@ export async function retryDeliveries(db) {
       const j=d.data();await deliver(db,j.kind,j.id);
     }
   }
+}
+
+const isId=v=>typeof v==="string" && /^\d{15,22}$/.test(v);
+// Autoservicio: el jugador pide una invitación nueva desde su perfil. No depende del pago ni de los mensajes privados.
+export async function reissueInvite(db,id,user,{call=api,now=Date.now}={}) {
+  const recruit=db.doc("recruits/"+id),ref=jobRef(db,"invite",id);
+  const row=(await recruit.get()).data();
+  if(!row || (row.discordId||id)!==user.id || row.status==="rejected")throw error(403,"No hay una postulación habilitada para esa cuenta.");
+  if(row.joinedAt || row.inviteState==="joined")return {state:"joined",link:null};
+  const prior=(await ref.get()).data();
+  if(prior && prior.recipient!==user.id)throw error(403,"La invitación pertenece a otra cuenta.");
+  if(prior?.lastReissue && now()-prior.lastReissue<300000)throw error(429,"Esperá unos minutos antes de pedir otra invitación.");
+  await db.runTransaction(async tx=>{
+    if(!(await tx.get(ref)).exists){enqueue(tx,db,"invite",id,user.id);tx.update(recruit,{inviteState:"pending"});}
+    tx.update(ref,{lastReissue:now()});
+  });
+  const state=await deliver(db,"invite",id,{call,now,manual:true});
+  const job=(await ref.get()).data();
+  return {state,link:job?.code && job.expires>now()?"https://discord.gg/"+job.code:null};
+}
+// Recuperación administrativa. Por defecto solo simula: no escribe ni llama a Discord. Con dryRun=false deja los casos en cola
+// y el cron los entrega de a pocos (5 por estado cada 10 min), así no hay ráfagas ni spam.
+export async function recoverInvites(db,{dryRun=true,limit=50,now=Date.now,by="admin"}={}) {
+  const [recruits,jobs]=await Promise.all([db.collection("recruits").get(),db.collection("recruitjobs").where("kind","==","invite").get()]);
+  const byId=new Map(jobs.docs.map(d=>[d.data().id,d.data()]));
+  const plan={total:recruits.docs.length,noJob:[],stuck:[],legacyWithoutDiscord:[],skipped:0};
+  for(const d of recruits.docs){
+    const r=d.data(),job=byId.get(d.id);
+    if(r.status==="rejected" || r.joinedAt || r.accessState==="joined" || r.inviteState==="joined" || job?.state==="joined"){plan.skipped++;continue;}
+    const uid=r.discordId || (isId(d.id)?d.id:null);
+    if(!isId(uid)){plan.legacyWithoutDiscord.push(d.id);continue;}
+    if(!job)plan.noJob.push({id:d.id,uid});
+    else if(["expired","blocked","config","identity","retry"].includes(job.state) || job.state==="sent" && job.expires<=now())plan.stuck.push({id:d.id,uid,state:job.state});
+  }
+  const todo=[...plan.noJob.map(x=>({...x,kind:"noJob"})),...plan.stuck.map(x=>({...x,kind:"stuck"}))].slice(0,Math.max(1,Math.min(200,limit)));
+  const result={dryRun,counts:{total:plan.total,sinInvitacion:plan.noJob.length,atascadas:plan.stuck.length,sinDiscord:plan.legacyWithoutDiscord.length,omitidas:plan.skipped},selected:todo.length,legacyWithoutDiscord:plan.legacyWithoutDiscord.slice(0,50)};
+  if(dryRun)return {...result,preview:todo.slice(0,50)};
+  for(const x of todo){
+    await db.runTransaction(async tx=>{
+      const ref=jobRef(db,"invite",x.id),recruit=db.doc("recruits/"+x.id);
+      const [js,rs]=await tx.getAll(ref,recruit),j=js.data(),r=rs.data();
+      if(!r || r.status==="rejected" || r.joinedAt)return;
+      if(!j)enqueue(tx,db,"invite",x.id,x.uid);
+      else if(j.state!=="joined")tx.update(ref,{state:"pending",code:null,expires:null,next:0,attempt:0,recoveredAt:now()});
+      else return;
+      tx.update(recruit,{inviteState:"pending"});
+      tx.set(db.collection("invitehistory").doc(),{id:x.id,recipient:x.uid,event:"recovery",at:now(),by});
+    });
+  }
+  return result;
 }

@@ -15,6 +15,10 @@
 
 import admin from "firebase-admin";
 import { randomInt } from "node:crypto";
+import { createHash as _h, timingSafeEqual as _t } from "node:crypto";
+// Comparación de la clave de instalación sin filtrar por tiempo.
+const sameKey = (a, b) => typeof a === "string" && _t(_h("sha256").update(a).digest(), _h("sha256").update(b).digest());
+
 
 const DOMAIN = () => process.env.STAFF_EMAIL_DOMAIN || "staff.ligat1.app";
 const emailOf = (u) => `${u}@${DOMAIN()}`;
@@ -185,7 +189,7 @@ export default async (req) => {
     if (body.action === "bootstrap") {
       const key = process.env.SETUP_KEY;
       if (!key) return json(403, { error: "La instalación está deshabilitada: falta SETUP_KEY en Netlify." });
-      if (body.key !== key) return json(403, { error: "Clave de instalación incorrecta." });
+      if (!sameKey(body.key, key)) return json(403, { error: "Clave de instalación incorrecta." });
       const existing = await db.collection("staff").limit(1).get();
       if (!existing.empty) return json(409, { error: "Ya hay staff creado. Para sumar cuentas, entrá con un ultra staff y usá el panel." });
       const users = Array.isArray(body.users) ? body.users : [];

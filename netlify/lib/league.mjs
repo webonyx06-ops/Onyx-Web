@@ -1,3 +1,4 @@
+import "../../public/js/series.js";
 // Cálculos de la liga para el bot: misma lógica que la página (tabla, desempates, stats, premios).
 export const TEAM_DEF = [
   ["onyx", "ONYX", "#7a8ce8"], ["orion", "ORION", "#2f7dff"], ["nexus", "NEXUS", "#ff6a1a"], ["zenith", "ZENITH", "#ff3fa4"],
@@ -119,14 +120,17 @@ export function build(raw) {
       rows[k] = { k, pj: n("g") + n("gp") + n("pp") + n("p"), g: n("g"), gp: n("gp"), pp: n("pp"), p: n("p"), rf: n("rf"), rc: n("rc"), kills: TK[k].k + n("kills"), ast: TK[k].a + n("ast"),
         pts: n("pts") + n("g") * PT.w + n("gp") * PT.otw + n("pp") * PT.otl + n("p") * PT.l, kd: TK[k].d ? TK[k].k / TK[k].d : 1, h2h: 0,
         form: (Array.isArray(a.form) ? a.form : []).map((c) => FM[c]).filter(Boolean) }; });
-    results.forEach((m) => {
-      const [pa, pb] = ptsOf(m);
-      [[m.a, +m.ra || 0, +m.rb || 0, pa], [m.b, +m.rb || 0, +m.ra || 0, pb]].forEach(([k, f, c2, pt]) => {
-        const r = rows[k]; r.pj++; r.rf += f; r.rc += c2; r.pts += pt;
-        const won = f > c2, code = won ? (m.ot ? "VP" : "V") : (m.ot ? "DP" : "D"); r.form.push(code);
+    const series = globalThis.onyxSeries(results);
+    for (const m of series) {
+      for (const [k,f,c,rf,rc] of [[m.a,m.ra,m.rb,m.roundA,m.roundB],[m.b,m.rb,m.ra,m.roundB,m.roundA]]) {
+        const r=rows[k]; if (!r) continue;
+        r.rf+=rf; r.rc+=rc;
+        if (Math.max(f,c)!==2) continue;
+        r.pj++; r.pts+=f>c?3:1;
+        const won = f > c, code = won ? (m.ot ? "VP" : "V") : (m.ot ? "DP" : "D"); r.form.push(code);
         if (code === "V") r.g++; else if (code === "VP") r.gp++; else if (code === "DP") r.pp++; else r.p++;
-      });
-    });
+      }
+    }
     const arr = Object.values(rows); arr.forEach((r) => { r.dif = r.rf - r.rc; });
     arr.sort((x, y) => y.pts - x.pts);
     const out = [];
@@ -135,7 +139,7 @@ export function build(raw) {
       const g = arr.slice(i, j);
       if (g.length > 1) {
         const ks = new Set(g.map((r) => r.k));
-        results.forEach((m) => { if (ks.has(m.a) && ks.has(m.b)) { const [pa, pb] = ptsOf(m); rows[m.a].h2h += pa; rows[m.b].h2h += pb; } });
+        series.forEach(m => { if (ks.has(m.a) && ks.has(m.b) && Math.max(m.ra,m.rb)===2) { rows[m.ra>m.rb?m.a:m.b].h2h+=3; rows[m.ra>m.rb?m.b:m.a].h2h+=1; } });
         g.sort((x, y) => { for (const [f, dir] of TIEBREAK) { const d = (y[f] - x[f]) * dir; if (d) return d; } return teams[x.k].order - teams[y.k].order; });
       }
       out.push(...g); i = j;

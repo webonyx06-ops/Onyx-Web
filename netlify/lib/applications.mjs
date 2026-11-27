@@ -34,6 +34,8 @@ export async function submitApplication(db, row, discordId, {source=discordId?"d
     if (previous?.status === "approved") fail(409,"La ficha ya fue aprobada. Pedile al staff cualquier cambio.");
     // Un formulario anónimo nunca puede editar la solicitud de otra persona.
     if (previous && source==="web") fail(409,"Ya recibimos una solicitud para ese Riot ID. Contactá al staff para corregirla.");
+    const priorInvite=discordId && (await tx.get(db.doc("recruitjobs/invite_"+id))).exists;
+    if(discordId && !priorInvite) enqueue(tx,db,"invite",id,discordId);
     const now = Date.now();
     if(receipt)fail(409,"Esperá la aceptación de tu solicitud.");
     tx.set(ref,{...row,feeCurrency:"ARS",feeAmount:3000,...(discordId?{discordId}:{}),...(receipt?{receiptState:"pending",receiptCount:1}:{}),status:"pending",source,updated:now,created:previous?.created || now},{merge:true});
@@ -61,14 +63,15 @@ export async function decideApplication(db,id,action,staff) {
       if(!recipient)fail(409,"Vinculá el Discord antes de verificar.");
       const riot=splitRiot(row.riot),pid=row.pid || "p_"+digest(row.riot);
       const player=(await tx.get(db.doc("players/"+pid))).data();
+      const hasInvite=(await tx.get(db.doc("recruitjobs/invite_"+id))).exists;
       const players=await tx.get(db.collection("players"));
       if(players.docs.some(d=>d.id!==pid && (norm(d.data().ign)===norm(row.riot)||d.data().discord===recipient)))fail(409,"Ya existe una ficha con esa identidad.");
       if(player && row.pid!==pid)fail(409,"Ya existe ese jugador.");
       if(!player)tx.set(db.doc("players/"+pid),{name:riot.name,ign:row.riot,joinedAt:Date.now(),team:null,rank:row.rango,role:["Duelista","Iniciador","Controlador","Centinela","Flex","Suplente"].find(v=>norm(v)===norm(row.principal))||"Flex",value:baseValue,clause:0,recruitment:profile(row),discord:recipient,recruitId:id});
       else tx.update(db.doc("players/"+pid),{recruitId:id,discord:recipient,marketEligible:true});
       tx.set(history,{id,hash:job.hash,method:row.method||null,decision:"verified",by:staff.uid,at:Date.now()});
-      tx.update(ref,{pid,paid:true,flowVersion:2,paymentState:"verified",verifiedBy:staff.u,verifiedAt:Date.now(),inviteState:"pending"});
-      enqueue(tx,db,"invite",id,recipient);
+      tx.update(ref,{pid,paid:true,flowVersion:2,paymentState:"verified",verifiedBy:staff.u,verifiedAt:Date.now()});
+      if(!hasInvite)enqueue(tx,db,"invite",id,recipient);
       queue(tx,db,"roles_"+pid,"roles",{rid:id,pid});
       if(!player?.team)queue(tx,db,"free_"+pid,"free",{rid:id,pid,version:player?.marketVersion||0});
       tx.set(db.doc("pubqueue/main"),{paths:admin.firestore.FieldValue.arrayUnion("players/"+pid),at:Date.now()},{merge:true});return pid;

@@ -89,14 +89,14 @@ export default async (req) => {
       });
       const label = (k) => String(k).toUpperCase();
       const r = await tryAuto(db, mid, { cfg, now, audit: (mm, x) => ({ at: now, uid: "servidor", u: "servidor", role: "auto", txt: `Resultado cargado solo (los dos capitanes coincidieron): F${mm.fecha} ${label(mm.a)} ${x.ra}-${x.rb} ${label(mm.b)}${x.map ? " · " + x.map : ""}` }) });
-      if (r.applied) { clearSnapshotCache(); const p = await patchSnapshot(db, [`matches/${mid}`]); await afterPatch(db, p).catch(() => {}); }
+      if (r.applied) { clearSnapshotCache(); const paths=[`matches/${mid}`]; if(m.leg!=="desempate"){const id=await createTiebreak(db,ms.ref,{captain:true,team:m.a,uid:who.uid},true); if(id)paths.push("matches/"+id);} const p = await patchSnapshot(db, paths); await afterPatch(db, p).catch(() => {}); }
       return json(200, { status: r.applied ? "auto" : "pend", why: r.why || "" });
     }
 
     if (b.action === "check") {
       if (!who.staff) return json(403, { error: "Solo staff." });
       const r = await tryAuto(db, mid, { manualCheck:true, cfg: { ...cfg, results: { ...R, auto: true } }, now, audit: (mm, x) => ({ at: now, uid: who.uid, u: who.u, role: who.role, txt: `Aprobó el resultado que mandaron los dos capitanes: F${mm.fecha} ${String(mm.a).toUpperCase()} ${x.ra}-${x.rb} ${String(mm.b).toUpperCase()}` }) });
-      if (r.applied) { const p = await patchSnapshot(db, [`matches/${mid}`]); await afterPatch(db, p).catch(() => {}); }
+      if (r.applied) { const paths=[`matches/${mid}`]; if(m.leg!=="desempate"){const id=await createTiebreak(db,ms.ref,{captain:true,team:m.a,uid:who.uid},true); if(id)paths.push("matches/"+id);} const p = await patchSnapshot(db, paths); await afterPatch(db, p).catch(() => {}); }
       return json(200, { applied: !!r.applied, why: r.why || "" });
     }
     return json(400, { error: "Acción desconocida." });

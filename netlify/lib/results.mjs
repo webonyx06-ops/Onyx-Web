@@ -15,7 +15,7 @@ export function cleanSubmission(b, m, players) {
   if (ra === rb) throw Object.assign(new Error("Un partido no puede terminar empatado."), { status: 400 });
   const hi = Math.max(ra, rb), lo = Math.min(ra, rb);
   if (hi < 13) throw Object.assign(new Error(`Con ${ra}-${rb} nadie llegó a 13. Si un equipo se rindió o no se presentó, avisale al staff.`), { status: 400 });
-  if (hi > 13 && hi - lo !== 2) throw Object.assign(new Error(`El marcador ${ra}-${rb} no es posible: en la prórroga se gana por 2 rondas.`), { status: 400 });
+  if ((hi === 13 && lo === 12) || (hi > 13 && hi - lo !== 2)) throw Object.assign(new Error(`El marcador ${ra}-${rb} no es posible: en la prórroga se gana por 2 rondas.`), { status: 400 });
   const stats = {};
   for (const [pid, s] of Object.entries(b.stats || {}).slice(0, 14)) {
     const p = players[pid]; if (!p || !s) continue;
