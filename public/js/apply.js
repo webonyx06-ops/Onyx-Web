@@ -9,7 +9,7 @@
   async function refresh(){
     const response=await fetch("/api/recruitment?identity=1",{cache:"no-store"});
     if(!response.ok)throw new Error("Recargá la página para verificar tu Discord.");
-    const {user,application,invite}=await response.json();
+    const {user,application,invite}=await response.json();window.__invite=application;
     if(!user)return;
     el("connect").hidden=true;form.hidden=!!application;el("myApplication").hidden=!application;
     form.elements.discord.value=user.username;
@@ -18,6 +18,9 @@
     el("myStatus").textContent={approved:"Postulación aprobada",pending:"Pendiente de aprobación",rejected:"Postulación rechazada"}[application.status];
     el("myRiot").textContent=application.riot;
     el("myNotice").textContent=application.access==="joined"?"Jugador incorporado al servidor.":application.paid?"Pago verificado.":application.status==="pending"?"Tu solicitud está en revisión. Al aceptarla se habilitará el pago.":application.status==="rejected"?"Postulación rechazada.":application.paymentState==="rejected"?"El staff rechazó el comprobante. Podés enviar otro.":receiptText(application.receipt);
+    const joined=application.access==="joined"||application.inviteState==="joined";
+    el("inviteNote").textContent=joined||invite||application.status==="rejected"?"":(application.inviteNote?application.inviteNote+". ":"")+"Si todavía no entraste al servidor, pedí una invitación nueva: no necesitás haber pagado.";
+    el("reinvite").hidden=joined||!application.canReinvite;
     el("myInvite").hidden=!invite;
     if(invite)el("myInvite").href=invite;
     el("paymentUpload").dataset.id=application.id;
@@ -47,6 +50,16 @@
       throw new Error("La imagen sigue siendo muy pesada. Recortá el comprobante y probá de nuevo.");
     }finally{URL.revokeObjectURL(url);}
   }
+  el("reinvite").addEventListener("click",async()=>{
+    const btn=el("reinvite");btn.disabled=true;el("inviteNote").textContent="Generando tu invitación…";
+    try{
+      const res=await fetch("/api/recruitment",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"reinvite"})});
+      const data=await res.json();if(!res.ok)throw new Error(data.error);
+      el("inviteNote").textContent=data.invite?"Listo: abrí tu invitación.":data.message||"";
+      if(data.invite){el("myInvite").href=data.invite;el("myInvite").hidden=false;}
+      else await refresh();
+    }catch(err){el("inviteNote").textContent=err.message;}finally{btn.disabled=false;}
+  });
   el("paymentUpload").addEventListener("submit",async e=>{
     e.preventDefault();const btn=e.currentTarget.querySelector("button");if(btn.disabled)return;
     btn.disabled=true;el("payStatus").textContent="Enviando…";

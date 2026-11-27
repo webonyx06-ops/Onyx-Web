@@ -245,7 +245,7 @@
         <div class="legend">
           <span><i style="background:var(--win)"></i><span id="lgPlayoff">Playoffs (1° a 4°)</span></span>
           <span><i style="background:var(--ot)"></i>Desempate aplicado</span>
-          <span><i style="background:var(--surface-3)"></i>V victoria · VP victoria en prórroga · DP derrota en prórroga · D derrota · RF rondas ganadas · RC rondas perdidas · K kills · A asistencias</span>
+          <span><i style="background:var(--surface-3)"></i>Victoria de fecha (2–0 o 2–1): 3 puntos. Derrota: 1. Con 1–1 se juega desempate. · VP histórica · DP derrota en prórroga · D derrota · RF rondas ganadas · RC rondas perdidas · K kills · A asistencias</span>
         </div>
       </div>
       <div style="display:grid;gap:18px;align-content:start;min-width:0">
@@ -298,7 +298,7 @@
   <section class="sec view" id="elegir-mapa" data-title="Mi mapa" hidden>
     <div class="sec-head">
       <div><div class="crumb"><svg class="ic"><use href="#i-flag"/></svg><span>Capitanes</span></div><h2>Elegí tu mapa</h2>
-        <p>Cada fecha se juega ida y vuelta: elegí <b>uno de los dos partidos</b>, su mapa y si tu equipo arranca en ataque o en defensa. El otro partido lo elige el capitán rival. Cada mapa se elige una sola vez: después queda descartado para tu equipo. Tu rival lo ve recién cuando el bot avisa los mapas.</p></div>
+        <p>Los capitanes alternan baneos, selecciones y lados iniciales. Cada cruce comienza con su propio pool de siete mapas. El último mapa queda reservado para un posible 1–1.</p></div>
     </div>
     <div id="mpRoot"></div>
   </section>
@@ -622,6 +622,6 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <script src="js/firebase-config.js"></script>
-<link rel="stylesheet" href="/css/store.css"><script type="module" src="/js/store.mjs"></script><script src="js/app.js"></script><script type="module" src="js/perfiles.mjs"></script><script type="module" src="js/billetera.mjs"></script>
+<link rel="stylesheet" href="/css/navidad.css"><script type="module" src="/js/navidad.mjs"></script><link rel="stylesheet" href="/css/store.css"><script type="module" src="/js/store.mjs"></script><script src="js/series-veto.js"></script><script src="js/series.js"></script><script src="js/app.js"></script><script type="module" src="js/perfiles.mjs"></script><script type="module" src="js/billetera.mjs"></script>
 </body>
 </html>

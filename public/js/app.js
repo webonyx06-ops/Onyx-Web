@@ -307,16 +307,19 @@ function standings(results, noAdj) {
     rows[k] = {k, pj: n("g") + n("gp") + n("pp") + n("p"), g: n("g"), gp: n("gp"), pp: n("pp"), p: n("p"), rf: n("rf"), rc: n("rc"), kills: (tk.k || 0) + n("kills"), ast: (tk.a || 0) + n("ast"),
       pts: n("pts") + n("g") * PT.w + n("gp") * PT.otw + n("pp") * PT.otl + n("p") * PT.l,
       form: (a.form || []).filter(c => ["W", "w", "l", "L"].includes(c)).map(c => ({c, manual: true})), kd: tk.d ? tk.k / tk.d : 1, h2h: 0, tie: null}; });
-  results.forEach(m => {
-    const [pa, pb] = ptsOf(m), P = M.cfg.points;
-    [[m.a, +m.ra || 0, +m.rb || 0, pa, m.noShow === "a"], [m.b, +m.rb || 0, +m.ra || 0, pb, m.noShow === "b"]].forEach(([k, f, c, pt, ns]) => {
-      const r = rows[k]; if (!r) return; r.pj++; r.rf += f; r.rc += c; r.pts += pt;
-      const won = f > c, code = won ? (m.ot ? "w" : "W") : (m.ot ? "l" : "L");
+  const series = globalThis.onyxSeries(results);
+    for (const m of series) {
+      for (const [k,f,c,rf,rc] of [[m.a,m.ra,m.rb,m.roundA,m.roundB],[m.b,m.rb,m.ra,m.roundB,m.roundA]]) {
+        const r=rows[k]; if (!r) continue;
+        r.rf+=rf; r.rc+=rc;
+        if (Math.max(f,c)!==2) continue;
+        r.pj++; r.pts+=f>c?3:1;
+        const won = f > c, code = won ? (m.ot ? "w" : "W") : (m.ot ? "l" : "L");
       r.form.push({c: code, proj: !!m.proj});
       if (code === "W") r.g++; else if (code === "w") r.gp++; else if (code === "l") r.pp++; else r.p++;
-    });
-  });
-  const arr = Object.values(rows); arr.forEach(r => r.dif = r.rf - r.rc);
+    }
+    }
+    const arr = Object.values(rows); arr.forEach(r => r.dif = r.rf - r.rc);
   arr.sort((x, y) => y.pts - x.pts);
   const out = [];
   for (let i = 0; i < arr.length;) {
@@ -324,7 +327,7 @@ function standings(results, noAdj) {
     const g = arr.slice(i, j);
     if (g.length > 1) {
       const ks = new Set(g.map(r => r.k));
-      results.forEach(m => { if (ks.has(m.a) && ks.has(m.b)) { const [pa, pb] = ptsOf(m); rows[m.a].h2h += pa; rows[m.b].h2h += pb; } });
+      series.forEach(m => { if (ks.has(m.a) && ks.has(m.b) && Math.max(m.ra,m.rb)===2) { rows[m.ra>m.rb?m.a:m.b].h2h+=3; rows[m.ra>m.rb?m.b:m.a].h2h+=1; } });
       g.sort((x, y) => { for (const [f, dir] of TIEBREAK) { const d = (y[f] - x[f]) * dir; if (d) return d; } return M.teams[x.k].order - M.teams[y.k].order; });
       g.forEach((r, q) => { const o = g[q + 1] || g[q - 1], c = TIEBREAK.find(([f]) => r[f] !== o[f]); r.tie = c ? c[2] : null; });
     }
@@ -878,7 +881,7 @@ function powerAt(f) {
 function renderPower() {
   if (!D.lastF) { $("#power").innerHTML = `<p class="muted">Aparece cuando se juegue la primera fecha.</p>`; return; }
   const now = powerAt(D.lastF), prev = powerAt(D.lastF - 1), prevPos = Object.fromEntries(prev.map((x, i) => [x.k, i + 1]));
-  const cum = k => { let s = 0; const out = [0]; for (let f = 1; f <= D.lastF; f++) { D.played.filter(m => m.fecha === f && (m.a === k || m.b === k)).forEach(m => { const [pa, pb] = ptsOf(m); s += m.a === k ? pa : pb; }); out.push(s); } return out; };
+  const cum = k => { let s = 0; const out = [0]; for (let f = 1; f <= D.lastF; f++) { globalThis.onyxSeries(D.played.filter(m => m.fecha === f)).forEach(m => { if (Math.max(m.ra,m.rb)===2 && (m.a===k || m.b===k)) s+=(m.a===k?m.ra:m.rb)===2?3:1; }); out.push(s); } return out; };
   const maxPts = Math.max(...TEAM_KEYS.map(k => cum(k).slice(-1)[0]), 1);
   $("#power").innerHTML = now.map((x, i) => {
     const t = TM(x.k), d = D.lastF > 1 ? prevPos[x.k] - (i + 1) : 0, pts = cum(x.k);
@@ -959,9 +962,10 @@ function mapBlockedFor(k, f) {
 const agoShort = t => { if (!t) return ""; const m = Math.round((Date.now() - t) / 60000); return m < 1 ? "recién" : m < 60 ? `hace ${m} min` : m < 1440 ? `hace ${Math.round(m / 60)} h` : new Date(t).toLocaleDateString("es-AR"); };
 function gameState(m, ct) { const cl = claimOf(m.id); return m.status === "played" ? "played" : cl && cl.team !== ct ? "taken" : cl && cl.team === ct ? "mine" : "free"; }
 function renderMapPick() {
-  const sec = $("#elegir-mapa"), ct = capTeam(), show = !!S.captain || S.mp.link, root = $("#mpRoot");
-  sec.hidden = !show; $("#navMp").hidden = !S.captain;
+  const sec = $("#elegir-mapa"), ct = capTeam(), show = !!S.captain || !!S.staff || !!S.member || S.mp.link, root = $("#mpRoot");
+  sec.hidden = !show; $("#navMp").hidden = !show;
   if (!show) return;
+  if (S.captain || S.staff || S.member) return renderSeriesVeto(root,S.captain?ct:null);
   if (!S.captain) root.innerHTML = `<div class="mk-lock cut"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg><div><b>Esta parte es para capitanes</b><span>Entrá con tu cuenta de capitán para elegir el partido (ida o vuelta), el mapa y el lado.</span></div><button class="btn gold sm" id="mpLogin" type="button">Entrar como capitán</button></div>`;
   else if (!ct) root.innerHTML = '<p class="muted">Todavía no tenés equipo asignado: pedile a un ultra staff que te asigne uno.</p>';
   else {
@@ -4138,7 +4142,7 @@ function resPayload() {
   if (ra === rb) return {err: "Un partido no puede terminar empatado."};
   const hi = Math.max(ra, rb), lo = Math.min(ra, rb);
   if (hi < 13) return {err: "Nadie llegó a 13. Si un equipo se rindió o no se presentó, avisale al staff."};
-  if (hi > 13 && hi - lo !== 2) return {err: `${ra}-${rb} no es posible: en la prórroga se gana por 2.`};
+  if ((hi === 13 && lo === 12) || (hi > 13 && hi - lo !== 2)) return {err: `${ra}-${rb} no es posible: en la prórroga se gana por 2.`};
   const stats = {}, seen = new Set();
   if (RS.rows.some(r => !r.pid && ["k", "d", "a", "acs"].some(f => r[f] !== "" && r[f] != null))) return {err: "Hay filas sin jugador: elegí quién es cada uno (o sacá la fila)."};
   for (const r of RS.rows) {
@@ -4187,7 +4191,7 @@ function capResultsCard(k) {
     groups.get(key).push(m);
   });
   for (const games of groups.values()) {
-    if (games.length===2 && games.some(m=>m.status!=="played") && games.some(m=>due.includes(m))) provisional.push(games[0]);
+    
     if (games.length !== 2 || games.some(m => m.status !== "played" || +m.ra === +m.rb)) continue;
     if (new Set(games.map(m=>+m.ra>+m.rb?m.a:m.b)).size === 2) ties.push(games[0]);
   }
@@ -4198,8 +4202,8 @@ function capResultsCard(k) {
     return `<div class="req res-req" style="--st:var(--${st[1] === "ok" ? "win" : st[1] === "no" ? "loss" : "gold"})">${img(rival)}<div><div class="rq-t"><b>F${m.fecha}${m.leg ? " " + LEG_L[m.leg] : ""}</b> vs ${esc(TM(rival).name)}${r ? ` · <span class="mono">${r.ra}-${r.rb}</span>` : ""}</div>
       <div class="rq-m">${fmtDate(m.date)}${r && r.check && r.status === "pend" ? ` · ${esc(r.check)}` : ""}${r && r.status === "rej" && r.reviewNote ? ` · “${esc(r.reviewNote)}”` : ""}</div></div>
       <div class="rq-acts"><span class="st ${st[1]}">${st[0]}</span>${m.status !== "played" ? `<button class="btn sm ${r ? "ghost" : "gold"}" data-cap-act="res:${m.id}">${r ? "Corregir" : "Cargar resultado"}</button>` : ""}</div></div>`; };
-  return `<div class="adm-card" id="capResultsSection" tabindex="-1"><h3>${ico("i-check")} Resultados <small>subí la captura del marcador después de jugar</small></h3><div style="display:grid;gap:6px">${list.map(row).join("")}${provisional.map(m=>`<label class="tie-file">¿Jugaron una tercera partida? · F${m.fecha} vs ${esc(TM(m.a===k?m.b:m.a).name)}<small>Guardá su captura mientras se revisan la ida y la vuelta.</small><input type="file" accept="image/png,image/jpeg,image/webp" data-stage="${esc(m.id)}"></label>`).join("")}${ties.map(m=>`<button class="btn sm" data-tiebreak="${esc(m.id)}">Jugamos desempate · F${m.fecha} vs ${esc(TM(m.a===k?m.b:m.a).name)}</button>`).join("")}</div>
-    <p class="adm-note">${resCfgC().auto ? "Cuando los dos capitanes mandan el mismo resultado, se carga solo en la tabla. Si no coinciden, lo revisa el staff con las dos capturas." : "El staff revisa cada resultado con la captura antes de cargarlo."}</p></div>`;
+  return `<div class="adm-card" id="capResultsSection" tabindex="-1"><h3>${ico("i-check")} Resultados <small>subí la captura del marcador después de jugar</small></h3><div style="display:grid;gap:6px">${list.map(row).join("")}${provisional.map(m=>`<label class="tie-file">¿Jugaron una tercera partida? · F${m.fecha} vs ${esc(TM(m.a===k?m.b:m.a).name)}<small>Guardá su captura mientras se revisan la ida y la vuelta.</small><input type="file" accept="image/png,image/jpeg,image/webp" data-stage="${esc(m.id)}"></label>`).join("")}${ties.map(m=>`<button class="btn sm" data-tiebreak="${esc(m.id)}">1–1 · Cargar tercer mapa · F${m.fecha} vs ${esc(TM(m.a===k?m.b:m.a).name)}</button>`).join("")}</div>
+    <p class="adm-note">${resCfgC().auto ? "Cada envío corresponde a un mapa. La fecha otorga 3 puntos al primer equipo que gane dos mapas. Si no coinciden, lo revisa el staff con las dos capturas." : "El staff revisa cada resultado con la captura antes de cargarlo."}</p></div>`;
 }
 
 // Staff: pestaña Resultados
@@ -5501,7 +5505,7 @@ document.addEventListener("click", async e => {
     const deliveryLabels={pending:"Pendiente",sending:"Enviando",sent:"Entregado",blocked:"Privados bloqueados",identity:"Falta verificar Discord",config:"Revisar canal y permisos",retry:"Reintento programado",expired:"Vencida"};
     const deliveryLine=(r,kind)=>{
       const state=kind==="receipt"?r.receiptState:r.inviteState;
-      if(kind==="invite" && (!r.paid || r.status!=="approved"))return "";
+      if(kind==="invite" && r.status==="rejected")return "";
       const retry=(state && state!=="sent" && state!=="joined" || kind==="invite" && !state);
       return `<p data-delivery><b>${kind==="invite"?"Invitación":"Comprobante"}</b> · <span>${esc(({joined:"Jugador incorporado",expired:"Vencida"})[state] || deliveryLabels[state] || "Sin enviar")}</span> ${retry?`<button class="btn sm ghost" data-redeliver="${kind}" data-id="${esc(r.id)}" data-legacy="${!r.discordId && !/^\d+$/.test(r.id)}">Reintentar envío</button>`:""}</p>`;
     };
@@ -5578,10 +5582,10 @@ renderAll();
 setInterval(tickClock, 1000);
 initShell();
 initFirebase();
+globalThis.onyxVetoCtx={TM:k=>TM(k),api:(...a)=>api(...a),get D(){return D},get S(){return S}};
 window.onyxWallet={api,rosterEntry:id=>S.remote.players[id]||{}, identity:()=>({uid:AUTH?.currentUser?.uid||"",pid:S.member?.pid||"",staff:!!S.staff}),players:()=>Object.entries(S.remote.players||{}).map(([id,p])=>({id,name:p.name||id})),matches:()=>Object.entries(S.remote.matches||{}).filter(([,m])=>m.status==="played"&&Object.keys(m.stats||{}).length).map(([id,m])=>({id,name:"Fecha "+m.fecha+" · "+m.a+" vs. "+m.b,count:Object.keys(m.stats).length})),prizes:()=>prizeList().filter(p=>p.active!==false&&p.pts>0),login:()=>openAccount(),member:()=>goView("perfil")};
 window.onyxProfiles={api,me:()=>myPid(),ultra:isUltra,scout:openAnalysis,players:()=>M&&!M.ex?D.P.map(p=>({id:p.id,name:p.name})):[],player:id=>{const p=D?.PM[id];if(!p||M.ex)return null;const raw=S.remote.players[id]||{},r=raw.recruitment||{},v=vsOf(id);return {percentiles:p.s.m?pcsOf(metricsOf(p),scLeague()):null,name:p.name,team:p.team?TM(p.team).name:"Agente libre",ign:ignOf(id),role:r.principal||p.role,secondary:r.secundario||null,agents:r.agentes||null,rank:v?.rank||raw.rank||null,peak:v?.peak?.rank||r.peak||null,country:r.pais,hours:r.horarios,flex:r.flex,joined:raw.joinedAt||null,v,seasons:Object.values(S.remote.seasons||{}).filter(s=>s.players?.[id]).map(s=>({name:s.name,stats:s.players[id],awards:Object.values(s.awards||{}).filter(a=>a.id===id).map(a=>a.label)})),points:(perfOf(id).pts||[]).filter(x=>x.id!=="carry"&&x.v>0).map(x=>({at:x.at,v:x.v})),log:p.log.map(x=>({...x,map:S.remote.matches[x.mid]?.map||null,agent:S.remote.matches[x.mid]?.stats?.[id]?.agent||null,extra:Object.fromEntries(["adr","kast","hs","firstBloods","aces","clutches","teamMvp"].map(k=>[k,S.remote.matches[x.mid]?.stats?.[id]?.[k]]))})),s:p.s,mvps:D.played.filter(m=>m.mvpId===id).length,transfers:M.transfers.filter(t=>t.pid===id).sort((a,b)=>b.at-a.at),awards:AWARD_KINDS.filter(([k])=>M.cfg.awards?.[k]===id).map(x=>x[1])};}};
 finishDiscordLogin();
-})();
 
 document.addEventListener("click",async e=>{
   if(!e.target.closest("[data-sync-panel]") || !isUltra())return;
@@ -5609,3 +5613,4 @@ document.addEventListener("click",async e=>{
   try{await api("/api/recruitment",{action:"bindLegacy",id:b.dataset.bindLegacy,discordId:discordId.trim()});b.remove();toast("Cuenta vinculada.");}
   catch(err){toast(err.message);b.disabled=false;}
 });
+})();

@@ -1,0 +1,23 @@
+/* ONYX Christmas Event 2026 · todo queda apagado salvo que el script agregue .nv-on */
+.nv-lights,.nv-snow,.nv-tree,.nv-gift,.nv-count{display:none}
+.nv-on .nv-lights{display:flex;position:fixed;top:0;left:0;right:0;height:14px;justify-content:space-around;z-index:60;pointer-events:none;border-top:2px solid #2a2a2a}
+.nv-lights i{width:8px;height:12px;border-radius:50%;background:var(--c,#f5c66b);box-shadow:0 0 8px var(--c,#f5c66b);animation:nv-tw 1.6s ease-in-out var(--d) infinite alternate}
+.nv-lights i[data-c="0"]{--c:#ff5a5a}.nv-lights i[data-c="1"]{--c:#f5c66b}.nv-lights i[data-c="2"]{--c:#5adf8a}.nv-lights i[data-c="3"]{--c:#6fb7ff}
+.nv-on .nv-snow{display:block;position:fixed;inset:0;width:100%;height:100%;z-index:59;pointer-events:none}
+.nv-on .nv-tree{display:block;position:fixed;right:14px;bottom:70px;z-index:61;font-size:34px;background:none;border:0;cursor:pointer;filter:drop-shadow(0 0 8px #2e7d4f)}
+.nv-on .nv-gift{display:block;position:fixed;right:58px;bottom:70px;z-index:61;font-size:22px;pointer-events:none;animation:nv-bob 2.4s ease-in-out infinite}
+.nv-on .nv-count{display:block;position:fixed;left:14px;bottom:14px;z-index:61;font-size:12px;color:#f5c66b;background:#000a;padding:4px 8px;border-radius:8px}
+.nv-toggle,.nv-cal{position:fixed;z-index:61;bottom:14px;font:600 12px system-ui;color:#f5f3ef;background:#1c1b22;border:1px solid #f5c66b;border-radius:10px;padding:7px 10px;cursor:pointer;min-height:36px}
+.nv-toggle{right:14px}.nv-cal{right:150px}
+.nv-toggle:focus-visible,.nv-cal:focus-visible,.nv-tree:focus-visible,.nv-door:focus-visible{outline:3px solid #e0b5ff;outline-offset:2px}
+.nv-panel{color:#f5f3ef;background:#17171e;border:1px solid #f5c66b;border-radius:16px;max-width:92vw;width:420px}
+.nv-panel::backdrop{background:#05050bcc}
+.nv-doors{display:grid;grid-template-columns:repeat(6,1fr);gap:8px;margin:12px 0}
+.nv-door{aspect-ratio:1;border-radius:8px;border:1px solid #555;background:#24232c;color:#f5f3ef;cursor:pointer;font-weight:700}
+.nv-door.ready{border-color:#5adf8a;box-shadow:0 0 8px #5adf8a66}.nv-door.open{background:#5c492b;border-color:#f5c66b}.nv-door:disabled{opacity:.4;cursor:not-allowed}
+.nv-spark{position:fixed;z-index:70;color:#ffe08a;pointer-events:none;animation:nv-spark .9s ease-out forwards}
+@keyframes nv-tw{from{opacity:.45}to{opacity:1}}
+@keyframes nv-bob{50%{transform:translateY(-5px)}}
+@keyframes nv-spark{to{transform:translate(var(--dx),var(--dy));opacity:0}}
+@media(max-width:700px){.nv-cal{right:14px;bottom:56px}.nv-on .nv-tree{bottom:100px}.nv-on .nv-gift{bottom:100px}.nv-doors{grid-template-columns:repeat(4,1fr)}}
+@media(prefers-reduced-motion:reduce){.nv-lights i,.nv-gift{animation:none}.nv-spark{display:none}}
