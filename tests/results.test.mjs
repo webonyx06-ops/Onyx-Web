@@ -15,7 +15,7 @@ test("valida el marcador", () => {
   assert.throws(() => cleanSubmission({ ra: 16, rb: 13 }, M, P), /por 2/);
   const ok = cleanSubmission({ ra: 14, rb: 12, stats: { ...stats(), zz: { k: 1, d: 1, a: 1, acs: 1 } }, map: "Bind" }, M, P);
   assert.equal(ok.ot, true); assert.ok(!ok.stats.zz, "ignora jugadores que no existen");
-  assert.equal(cleanSubmission({ ra: 13, rb: 12 }, M, P).ot, true, "13-12 (muerte súbita) cuenta como prórroga");
+  assert.throws(() => cleanSubmission({ra:13,rb:12},M,P), /por 2/);
   assert.equal(Object.keys(ok.stats).length, 10);
 });
 

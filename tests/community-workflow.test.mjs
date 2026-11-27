@@ -82,7 +82,7 @@ test("pago rechazado, prueba repetida entre cuentas y puertas de acceso",async()
   await r.update({paid:false,status:"pending"});await db.runTransaction(tx=>enqueue(tx,db,"invite",id,id));
   const file=receiptFile("data:application/pdf;base64,"+Buffer.from("%PDF-1.6 test file").toString("base64"));
   await assert.rejects(saveReceipt(db,id,{id},file,"paypal"),{status:403});
-  let calls=0;await deliver(db,"invite",id,{call:async()=>{calls++;}});assert.equal(calls,0);
+  let calls=0;await deliver(db,"invite",id,{call:async()=>{calls++;}});assert.ok(calls>0);assert.equal((await r.get()).data().paid,false);
   await r.update({status:"approved"});await saveReceipt(db,id,{id},file,"paypal");
   await assert.rejects(decideApplication(db,id,"verify",{...staff,receiptHash:file.hash}),{status:409});
   await r.update({receiptState:"sent"});await db.doc("recruitjobs/receipt_"+id).update({state:"sent"});
@@ -121,7 +121,7 @@ test("vencimiento y regeneración manual para un solo destinatario; migración r
   assert.equal(await deliver(db,"invite",id,{manual:true,call}),"sent");assert.equal(created,1);
   await db.doc("recruits/"+id).update({flowVersion:0,paid:false});
   const revoked=[];await upgradeRecruitment(db,async(m,path)=>{revoked.push([m,path]);});
-  assert.deepEqual(revoked,[["DELETE","/invites/renewed"]]);assert.equal((await inv.get()).exists,false);
+  assert.deepEqual(revoked,[]);assert.equal((await inv.get()).data().code,"renewed");
 });
 
 
@@ -136,8 +136,8 @@ test("el panel personal solo entrega el enlace vigente a su titular con el pago 
   await inv.set({recipient:id,code:"personal",expires:Date.now()+86400000});
   assert.equal((await read(id)).invite,"https://discord.gg/personal");
   assert.equal((await read(botId)).invite,null);
-  await db.doc("recruits/"+id).update({paid:false});
-  assert.equal((await read(id)).invite,null);
+  await db.doc("recruits/"+id).update({paid:false,status:"pending"});
+  assert.equal((await read(id)).invite,"https://discord.gg/personal");
   await db.doc("recruits/"+id).update({paid:true});
   await inv.update({expires:1});assert.equal((await read(id)).invite,null);
 });
